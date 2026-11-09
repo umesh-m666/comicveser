@@ -44,7 +44,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("../common/config");
 const argon2 = __importStar(require("argon2"));
 const prisma_service_1 = require("../prisma/prisma.service");
 const mail_service_1 = require("../mail/mail.service");
@@ -69,7 +68,7 @@ let AuthService = class AuthService {
             this.log.error(`Email to user failed: ${e.message}`);
         }
     }
-    web = () => (0, config_1.primaryWebOrigin)();
+    web = () => process.env.WEB_ORIGIN ?? "http://localhost:3000";
     async issueToken(userId, type, hours) {
         const token = (0, crypto_1.randomToken)();
         await this.db.authToken.create({ data: { userId, type, tokenHash: (0, crypto_1.sha256)(token), expiresAt: new Date(Date.now() + hours * 3600_000) } });

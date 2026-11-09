@@ -49,7 +49,11 @@ let SourcesController = class SourcesController {
     catalogDetails(id, ext) { return this.svc.adminDetails(id, ext); }
     catalogChapters(id, ext, q) { return this.svc.adminChapters(id, ext, q); }
     catalogAlternatives(id, ext, q) { return this.svc.adminAlternatives(id, ext, q.language); }
+    // ---- admin fallback management & chapter catalogue routes
     comicChapters(comicId, q) { return this.svc.adminComicChapters(comicId, q); }
+    fallbackCandidates(comicId, q) { return this.svc.adminFallbackCandidates(comicId, q); }
+    linkFallback(u, comicId, d) { return this.svc.linkFallbackSource(comicId, d, u.id); }
+    async unlinkFallback(u, comicId, sourceId) { await this.svc.unlinkFallbackSource(comicId, sourceId, u.id); }
     importAlternativeChapters(u, comicId, d) {
         return this.svc.importAlternativeChaptersForComic(comicId, d.sourceId, d.externalId, { language: d.language ?? "en", page: d.page ?? 1, limit: d.limit ?? 500 }, u.id);
     }
@@ -59,7 +63,9 @@ let SourcesController = class SourcesController {
     reject(u, id, ext, d) { return this.svc.reject(id, ext, d.note, u.id); }
     unpublish(u, id, ext) { return this.svc.unpublish(id, ext, u.id); }
     republish(u, id, ext) { return this.svc.republish(id, ext, u.id); }
-    importChapters(u, id, ext, q) { return this.svc.importChapterPage(id, ext, q, u.id); }
+    importChapters(u, id, ext, q, body) {
+        return this.svc.importChapterPage(id, ext, q, u.id, body?.chapterIds);
+    }
     async adminCover(id, mangaId, file, res) {
         const { body, contentType } = await this.svc.adminCover(id, mangaId, file);
         this.sendCover(res, body, contentType);
@@ -239,13 +245,46 @@ __decorate([
 ], SourcesController.prototype, "catalogAlternatives", null);
 __decorate([
     (0, auth_guard_1.RequireAdmin)(),
-    (0, common_1.Get)("admin/sources/comics/:comicId/chapters"),
-    __param(0, (0, common_1.Param)("comicId")),
+    (0, common_1.Get)("admin/sources/comics/:id/chapters"),
+    __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [String, sources_dto_1.ComicChaptersQuery]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "comicChapters", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, throttler_1.Throttle)({ default: { limit: 30, ttl: 60_000 } }),
+    (0, common_1.Get)("admin/sources/comics/:id/fallback-candidates"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, sources_dto_1.FallbackCandidatesQuery]),
+    __metadata("design:returntype", void 0)
+], SourcesController.prototype, "fallbackCandidates", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, throttler_1.Throttle)({ default: { limit: 20, ttl: 60_000 } }),
+    (0, common_1.HttpCode)(200),
+    (0, common_1.Post)("admin/sources/comics/:id/fallbacks"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("id")),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, sources_dto_1.LinkFallbackDto]),
+    __metadata("design:returntype", void 0)
+], SourcesController.prototype, "linkFallback", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, common_1.HttpCode)(204),
+    (0, common_1.Delete)("admin/sources/comics/:id/fallbacks/:sourceId"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("id")),
+    __param(2, (0, common_1.Param)(SOURCE)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", Promise)
+], SourcesController.prototype, "unlinkFallback", null);
 __decorate([
     (0, auth_guard_1.RequireAdmin)(),
     (0, throttler_1.Throttle)({ default: { limit: 10, ttl: 60_000 } }),
@@ -315,8 +354,9 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Param)("externalId")),
     __param(3, (0, common_1.Query)()),
+    __param(4, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [Object, String, String, sources_dto_1.ChaptersQuery, sources_dto_1.ImportChaptersBodyDto]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "importChapters", null);
 __decorate([

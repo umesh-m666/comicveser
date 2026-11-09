@@ -4,6 +4,9 @@ import Recommended from "@/components/Recommended";
 import ComicCard, { Cover } from "@/components/ComicCard";
 import { allComics, getAnnouncements, latestChapter } from "@/lib/comics";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 
 function Section({ title, href, children, eyebrow }: { title: string; href?: string; children: React.ReactNode; eyebrow?: string }) {

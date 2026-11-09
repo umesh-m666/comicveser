@@ -25,6 +25,7 @@ function SaveButton({ sourceId, mangaId }: { sourceId: string; mangaId: string }
 
 export default function ExternalManga({ params }: { params: { sourceId: string; mangaId: string } }) {
   const { sourceId, mangaId } = params;
+  const isComick = sourceId === "comick";
   const d = useLoad<MangaDetails>(`/sources/${sourceId}/manga/${mangaId}`);
   const src = useLoad<SourceInfo>(`/sources/${sourceId}`);
   const [lang, setLang] = useState(""); const [page, setPage] = useState(1);
@@ -35,20 +36,21 @@ export default function ExternalManga({ params }: { params: { sourceId: string; 
   const [altLoading, setAltLoading] = useState(false);
 
   useEffect(() => { if (d.data && !lang) setLang(d.data.availableLanguages.includes("en") || !d.data.availableLanguages.length ? "en" : d.data.availableLanguages[0]); }, [d.data, lang]);
-  useEffect(() => { setChapters([]); setPage(1); setMore(false); setChErr(""); setChState("loading"); }, [lang]);
+  useEffect(() => { setChapters([]); setPage(1); setMore(false); setChErr(""); setChState(isComick ? "done" : "loading"); }, [lang, isComick]);
   useEffect(() => {
-    if (!lang) return; let live = true; setChState("loading"); setChErr("");
+    if (!lang || isComick) return;
+    let live = true; setChState("loading"); setChErr("");
     api<Paged<ExtChapter>>(`/sources/${sourceId}/manga/${mangaId}/chapters?language=${encodeURIComponent(lang)}&page=${page}&limit=100`, { cache: "no-store" })
       .then((r) => { if (!live) return; setChapters((c) => (page === 1 ? r.items : [...c, ...r.items])); setMore(r.hasMore); setChState("done"); })
       .catch((e) => { if (live) { setChErr(e instanceof ApiError ? e.message : "Couldn't load chapters."); setChState("error"); } });
     return () => { live = false; };
-  }, [sourceId, mangaId, lang, page, retry]);
+  }, [sourceId, mangaId, lang, page, retry, isComick]);
   useEffect(() => { try { const p = JSON.parse(localStorage.getItem(`cv:progress:ext:${sourceId}:${mangaId}`) ?? "null"); if (p?.chapterId) setResume(p.chapterId); } catch {} }, [sourceId, mangaId]);
 
-  // Search WeebCentral and Asura Scans for the same title when viewing ComicK or when ComicK chapters are unavailable.
+  // Search WeebCentral and Asura Scans for the same title when viewing ComicK or when chapters are unavailable.
   useEffect(() => {
     if (!lang) return;
-    if (sourceId !== "comick" && chState !== "error" && !(chState === "done" && chapters.length === 0)) return;
+    if (!isComick && chState !== "error" && !(chState === "done" && chapters.length === 0)) return;
     let live = true;
     setAltLoading(true);
     api<{ alternatives: AlternativeSourceMatch[] }>(`/sources/${sourceId}/manga/${encodeURIComponent(mangaId)}/alternatives?language=${encodeURIComponent(lang)}`, { cache: "no-store" })
@@ -56,10 +58,10 @@ export default function ExternalManga({ params }: { params: { sourceId: string; 
       .catch(() => { if (live) setAlternatives([]); })
       .finally(() => { if (live) setAltLoading(false); });
     return () => { live = false; };
-  }, [sourceId, mangaId, lang, chState, chapters.length]);
+  }, [sourceId, mangaId, lang, chState, chapters.length, isComick]);
 
   const readHref = (id: string) => `/sources/${sourceId}/${mangaId}/read/${id}?lang=${encodeURIComponent(lang)}`;
-  const m = d.data; const first = chapters[0];
+  const m = d.data; const first = !isComick ? chapters[0] : undefined;
   const firstAltChapter = alternatives[0]?.chapters[0];
 
   return (
@@ -86,7 +88,7 @@ export default function ExternalManga({ params }: { params: { sourceId: string; 
               ) : (
                 <button disabled className="rounded-md bg-primary px-5 py-2.5 font-semibold text-white opacity-50">Read Chapter</button>
               )}
-              {resume && <Link href={readHref(resume)} className="rounded-md bg-secondary px-5 py-2.5 font-semibold text-white">Continue reading</Link>}
+              {resume && !isComick && <Link href={readHref(resume)} className="rounded-md bg-secondary px-5 py-2.5 font-semibold text-white">Continue reading</Link>}
               <SaveButton sourceId={sourceId} mangaId={mangaId} />
               <a href={m.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-line px-4 py-2.5 font-semibold hover:bg-card"><ExternalLink size={16} aria-hidden />Open on {src.data?.displayName ?? "source"}</a>
             </div>
@@ -94,34 +96,43 @@ export default function ExternalManga({ params }: { params: { sourceId: string; 
           </div>
         </div>
 
-        <section className="mt-10">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-bold">Chapters</h2>
-            <label className="text-sm"><span className="mr-2 text-muted">Language</span>
-              <select value={lang} onChange={(e) => setLang(e.target.value)} className="rounded-md border border-line bg-surface px-2 py-1.5">{(m.availableLanguages.length ? m.availableLanguages.map((l) => [l, LANGUAGES.find(([v]) => v === l)?.[1] ?? l] as [string, string]) : LANGUAGES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>
-          {chState === "error" && (
-            <div role="alert" className="rounded-lg border border-line bg-card p-4 text-sm text-danger">
-              <p>{chErr}</p>
-              <button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-2 rounded-md border border-line px-3 py-1.5 hover:bg-surface">Retry</button>
-            </div>
-          )}
-          {chState === "done" && chapters.length === 0 && <p className="rounded-lg border border-line bg-card p-4 text-muted">No readable chapters in this language on {src.data?.displayName ?? sourceId}.</p>}
-          {chState === "loading" && chapters.length === 0 && <div className="skeleton h-32" aria-busy="true" />}
-          {chapters.length > 0 && (
-            <ul className="divide-y divide-line rounded-lg border border-line bg-card">{chapters.map((c) => (
-              <li key={c.id}><Link href={readHref(c.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-surface">
-                <span className="font-medium">{c.numberLabel ? `Chapter ${c.numberLabel}` : "Special"}{c.title ? `: ${c.title}` : ""}{c.duplicateNumber && <span className="ml-2 text-xs text-muted">(alternate release)</span>}</span>
-                <span className="text-xs text-muted">{c.groups.join(", ") || "Unknown group"}{c.publishedAt ? ` · ${new Date(c.publishedAt).toLocaleDateString("en-IN")}` : ""}</span></Link></li>))}</ul>)}
-          {more && <button disabled={chState === "loading"} onClick={() => setPage((p) => p + 1)} className="mt-4 rounded-md border border-line px-4 py-2 text-sm hover:bg-card disabled:opacity-50">Load more chapters</button>}
-        </section>
+        {!isComick && (
+          <section className="mt-10">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-xl font-bold">Chapters</h2>
+              <label className="text-sm"><span className="mr-2 text-muted">Language</span>
+                <select value={lang} onChange={(e) => setLang(e.target.value)} className="rounded-md border border-line bg-surface px-2 py-1.5">{(m.availableLanguages.length ? m.availableLanguages.map((l) => [l, LANGUAGES.find(([v]) => v === l)?.[1] ?? l] as [string, string]) : LANGUAGES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label></div>
+            {chState === "error" && (
+              <div role="alert" className="rounded-lg border border-line bg-card p-4 text-sm text-danger">
+                <p>{chErr}</p>
+                <button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-2 rounded-md border border-line px-3 py-1.5 hover:bg-surface">Retry</button>
+              </div>
+            )}
+            {chState === "done" && chapters.length === 0 && <p className="rounded-lg border border-line bg-card p-4 text-muted">No readable chapters in this language on {src.data?.displayName ?? sourceId}.</p>}
+            {chState === "loading" && chapters.length === 0 && <div className="skeleton h-32" aria-busy="true" />}
+            {chapters.length > 0 && (
+              <ul className="divide-y divide-line rounded-lg border border-line bg-card">{chapters.map((c) => (
+                <li key={c.id}><Link href={readHref(c.id)} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-surface">
+                  <span className="font-medium">{c.numberLabel ? `Chapter ${c.numberLabel}` : "Special"}{c.title ? `: ${c.title}` : ""}{c.duplicateNumber && <span className="ml-2 text-xs text-muted">(alternate release)</span>}</span>
+                  <span className="text-xs text-muted">{c.groups.join(", ") || "Unknown group"}{c.publishedAt ? ` · ${new Date(c.publishedAt).toLocaleDateString("en-IN")}` : ""}</span></Link></li>))}</ul>)}
+            {more && <button disabled={chState === "loading"} onClick={() => setPage((p) => p + 1)} className="mt-4 rounded-md border border-line px-4 py-2 text-sm hover:bg-card disabled:opacity-50">Load more chapters</button>}
+          </section>
+        )}
 
-        {(altLoading || alternatives.length > 0) && (
+        {(isComick || altLoading || alternatives.length > 0) && (
           <section className="mt-10 rounded-xl border border-line bg-card p-5">
             <h2 className="text-lg font-bold">Alternative chapter sources (WeebCentral &amp; Asura Scans)</h2>
             <p className="mt-1 text-sm text-muted">
-              Chapters below use each alternative provider&apos;s own manga ID, chapter ID, and reader URL.
+              {isComick
+                ? "ComicK chapters are hidden because upstream page images are unavailable. Read chapters below from WeebCentral or Asura Scans using their own provider IDs and reader URLs."
+                : "Chapters below use each alternative provider's own manga ID, chapter ID, and reader URL."}
             </p>
             {altLoading && alternatives.length === 0 && (
               <p className="mt-4 text-sm text-muted" aria-busy="true">Searching WeebCentral and Asura Scans for matching chapters…</p>
+            )}
+            {!altLoading && alternatives.length === 0 && (
+              <p className="mt-4 rounded-md border border-line bg-surface p-3 text-sm text-muted">
+                No matching chapters found on WeebCentral or Asura Scans.
+              </p>
             )}
             {alternatives.map((alt) => (
               <div key={`${alt.sourceId}:${alt.externalId}`} className="mt-4 rounded-lg border border-line bg-surface p-4">

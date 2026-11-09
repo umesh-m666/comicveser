@@ -115,12 +115,30 @@ let AdminService = class AdminService {
         return { totals: { users, activeUsers30d: active.length, comics, chapters, publishedChapters: published, readingRecords: reading, pendingReports: reports }, popular, latest };
     }
     async comics(q) {
-        const where = { deletedAt: null, ...(q.state && { publishState: q.state }), ...(q.q && { title: { contains: q.q, mode: "insensitive" } }) };
-        const [total, items] = await Promise.all([
+        const where = {
+            deletedAt: null,
+            ...(q.state ? { publishState: q.state } : { publishState: { not: "ARCHIVED" } }),
+            ...(q.q && { title: { contains: q.q, mode: "insensitive" } }),
+        };
+        const [total, rawItems] = await Promise.all([
             this.db.comic.count({ where }),
-            this.db.comic.findMany({ where, orderBy: { updatedAt: "desc" }, ...pg(q.page), include: { _count: { select: { chapters: true } } } }),
+            this.db.comic.findMany({
+                where,
+                orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+                ...pg(q.page),
+                include: { _count: { select: { chapters: { where: { deletedAt: null } } } } },
+            }),
         ]);
-        return { items, total, page: q.page, pages: Math.max(1, Math.ceil(total / SIZE)) };
+        const seen = new Set();
+        const items = rawItems.filter((c) => {
+            const k = c.title.trim().toLowerCase().replace(/^official\s+/i, "").replace(/[^a-z0-9]+/g, "") || c.id;
+            if (seen.has(k))
+                return false;
+            seen.add(k);
+            return true;
+        });
+        const adjustedTotal = Math.max(items.length, total - (rawItems.length - items.length));
+        return { items, total: adjustedTotal, page: q.page, pages: Math.max(1, Math.ceil(adjustedTotal / SIZE)) };
     }
     async comic(id) {
         const c = await this.db.comic.findFirst({ where: { id, deletedAt: null }, include: { genres: { include: { genre: true } } } });
@@ -132,7 +150,19 @@ let AdminService = class AdminService {
     chapters(comicId) {
         if (!comicId)
             throw bad("comicId is required.");
-        return this.db.chapter.findMany({ where: { comicId, deletedAt: null }, orderBy: { number: "desc" }, include: { _count: { select: { images: true } } } });
+        return this.db.chapter.findMany({
+            where: { comicId, deletedAt: null },
+            orderBy: { number: "desc" },
+            include: {
+                _count: { select: { images: true } },
+                comic: { select: { slug: true } },
+                sourceChapter: {
+                    include: {
+                        sourceTitle: { select: { sourceId: true, externalId: true } },
+                    },
+                },
+            },
+        });
     }
     async chapter(id) {
         const ch = await this.db.chapter.findFirst({ where: { id, deletedAt: null }, include: { comic: { select: { id: true, title: true, slug: true } }, images: { orderBy: { position: "asc" } } } });

@@ -74,7 +74,7 @@ let ReviewsService = class ReviewsService {
         this.db = db;
     }
     async comic(id) {
-        if (!(await this.db.comic.findFirst({ where: { id, publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] }, select: { id: true } })))
+        if (!(await this.db.comic.findFirst({ where: { id, publishState: "PUBLISHED", deletedAt: null, OR: this.db.publicComicOrFilter }, select: { id: true } })))
             throw new common_1.NotFoundException("Comic not found.");
     }
     async list(comicId, page) {
@@ -141,7 +141,7 @@ let ReviewsService = class ReviewsService {
     }
     async report(userId, d) {
         const exists = d.targetType === "REVIEW" ? await this.db.review.findFirst({ where: { id: d.targetId, deletedAt: null }, select: { id: true } })
-            : d.targetType === "COMIC" ? await this.db.comic.findFirst({ where: { id: d.targetId, publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] }, select: { id: true } }) : { id: d.targetId };
+            : d.targetType === "COMIC" ? await this.db.comic.findFirst({ where: { id: d.targetId, publishState: "PUBLISHED", deletedAt: null, OR: this.db.publicComicOrFilter }, select: { id: true } }) : { id: d.targetId };
         if (!exists)
             throw new common_1.NotFoundException("Nothing to report.");
         if (await this.db.report.findFirst({ where: { reporterId: userId, targetType: d.targetType, targetId: d.targetId, status: "OPEN" }, select: { id: true } }))

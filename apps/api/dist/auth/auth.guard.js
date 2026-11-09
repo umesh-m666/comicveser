@@ -14,7 +14,6 @@ const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const prisma_service_1 = require("../prisma/prisma.service");
 const crypto_1 = require("../common/crypto");
-const config_1 = require("../common/config");
 exports.SESSION_COOKIE = "cv_session";
 let SessionGuard = class SessionGuard {
     db;
@@ -78,7 +77,7 @@ exports.RequirePermission = RequirePermission;
 const RequireAdmin = () => (0, common_1.applyDecorators)((0, common_1.SetMetadata)("perm", "comic:write"), (0, common_1.UseGuards)(SessionGuard, AdminRoleGuard, PermissionGuard));
 exports.RequireAdmin = RequireAdmin;
 exports.CurrentUser = (0, common_1.createParamDecorator)((_, ctx) => ctx.switchToHttp().getRequest().user);
-// CSRF defence: every state-changing request must come from the web origin (this matters because the cookie may be SameSite=None).
+// CSRF defence: cookies are SameSite=Lax, and every state-changing request must come from the web origin.
 const SkipOrigin = () => (0, common_1.SetMetadata)("skipOrigin", true);
 exports.SkipOrigin = SkipOrigin;
 let OriginGuard = class OriginGuard {
@@ -93,7 +92,8 @@ let OriginGuard = class OriginGuard {
         if (["GET", "HEAD", "OPTIONS"].includes(req.method))
             return true;
         const origin = req.headers.origin;
-        if (!origin || !(0, config_1.webOrigins)().includes(origin))
+        const allowed = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+        if (origin !== allowed)
             throw new common_1.ForbiddenException("Request origin not allowed.");
         return true;
     }

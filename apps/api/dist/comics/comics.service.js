@@ -16,11 +16,30 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const util_1 = require("../common/util");
 const storage_service_1 = require("../storage/storage.service");
 const crypto_1 = require("crypto");
-const PUBLIC = {
-    publishState: "PUBLISHED", deletedAt: null,
-    OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }],
-};
 const include = { genres: { include: { genre: true } } };
+function normalizeTitleKey(title) {
+    return title
+        .trim()
+        .toLowerCase()
+        .replace(/^official\s+/i, "")
+        .replace(/[^a-z0-9]+/g, "");
+}
+function dedupeByTitle(rows) {
+    const seenIds = new Set();
+    const seenTitles = new Set();
+    const out = [];
+    for (const row of rows) {
+        if (seenIds.has(row.id))
+            continue;
+        const key = normalizeTitleKey(row.title) || row.id;
+        if (seenTitles.has(key))
+            continue;
+        seenIds.add(row.id);
+        seenTitles.add(key);
+        out.push(row);
+    }
+    return out;
+}
 let ComicsService = class ComicsService {
     db;
     cache;
@@ -30,9 +49,20 @@ let ComicsService = class ComicsService {
         this.cache = cache;
         this.storage = storage;
     }
+    get publicWhere() {
+        return {
+            publishState: "PUBLISHED",
+            deletedAt: null,
+        };
+    }
     mediaUrl(key) { return key ? this.storage.readUrl(key) : Promise.resolve(null); }
+    invalidateHomeCaches() {
+        return Promise.all(["comics:trending", "comics:popular", "comics:latest"].map((key) => this.cache.delete(key)));
+    }
     // Average comes from Rating rows only; it is never stored on the comic.
     async withRatings(items) {
+        if (!items.length)
+            return [];
         const g = await this.db.rating.groupBy({ by: ["comicId"], where: { comicId: { in: items.map((i) => i.id) } }, _avg: { value: true }, _count: true });
         const m = new Map(g.map((r) => [r.comicId, r]));
         const latest = await this.db.chapter.findMany({
@@ -53,32 +83,47 @@ let ComicsService = class ComicsService {
     }
     async list(q) {
         const where = {
-            ...PUBLIC,
-            ...(q.q && { OR: [
-                    { title: { contains: q.q, mode: "insensitive" } }, { altTitle: { contains: q.q, mode: "insensitive" } },
-                    { author: { contains: q.q, mode: "insensitive" } }, { artist: { contains: q.q, mode: "insensitive" } },
-                ] }),
+            ...this.publicWhere,
+            ...(q.q && {
+                OR: [
+                    { title: { contains: q.q, mode: "insensitive" } },
+                    { altTitle: { contains: q.q, mode: "insensitive" } },
+                    { author: { contains: q.q, mode: "insensitive" } },
+                    { artist: { contains: q.q, mode: "insensitive" } },
+                ],
+            }),
             ...(q.genre && { genres: { some: { genre: { slug: q.genre } } } }),
             ...(q.type && { type: q.type }), ...(q.status && { status: q.status }), ...(q.year && { releaseYear: q.year }),
         };
-        const orderBy = { updated: { updatedAt: "desc" }, added: { createdAt: "desc" }, popular: { views: "desc" }, alpha: { title: "asc" } }[q.sort ?? "updated"];
+        const orderBy = [
+            { updated: { updatedAt: "desc" }, added: { createdAt: "desc" }, popular: { views: "desc" }, alpha: { title: "asc" } }[q.sort ?? "updated"],
+            { createdAt: "desc" },
+        ];
         const [total, rows] = await this.db.$transaction([
             this.db.comic.count({ where }),
             this.db.comic.findMany({ where, orderBy, include, skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
         ]);
-        let items = await this.withRatings(rows);
+        const uniqueRows = dedupeByTitle(rows);
+        let items = await this.withRatings(uniqueRows);
         if (q.minRating)
-            items = items.filter((i) => (i.rating ?? 0) >= q.minRating); // note: filters within page; moves to SQL in Phase 7
-        return { items, total, page: q.page, pageSize: q.pageSize, pages: Math.max(1, Math.ceil(total / q.pageSize)) };
+            items = items.filter((i) => (i.rating ?? 0) >= q.minRating);
+        const adjustedTotal = Math.max(items.length, total - (rows.length - uniqueRows.length));
+        return { items, total: adjustedTotal, page: q.page, pageSize: q.pageSize, pages: Math.max(1, Math.ceil(adjustedTotal / q.pageSize)) };
     }
     async top(orderBy, take = 12) {
-        return this.withRatings(await this.db.comic.findMany({ where: PUBLIC, orderBy, include, take }));
+        const rows = await this.db.comic.findMany({
+            where: this.publicWhere,
+            orderBy: [orderBy, { createdAt: "desc" }],
+            include,
+            take: take * 2,
+        });
+        return this.withRatings(dedupeByTitle(rows).slice(0, take));
     }
     trending() { return this.cache.wrap("comics:trending", 60, () => this.top({ views: "desc" })); }
     popular() { return this.cache.wrap("comics:popular", 60, () => this.top({ views: "desc" })); }
     latest() { return this.cache.wrap("comics:latest", 60, () => this.top({ updatedAt: "desc" })); }
     async bySlug(slug) {
-        const c = await this.db.comic.findFirst({ where: { slug, ...PUBLIC }, include });
+        const c = await this.db.comic.findFirst({ where: { slug, ...this.publicWhere }, include });
         if (!c)
             throw new common_1.NotFoundException("Comic not found.");
         const [withRating] = await this.withRatings([c]);
@@ -86,7 +131,7 @@ let ComicsService = class ComicsService {
         return { ...withRating, chapterCount };
     }
     async chapters(comicId, order = "desc") {
-        const comic = await this.db.comic.findFirst({ where: { id: comicId, ...PUBLIC }, select: { id: true } });
+        const comic = await this.db.comic.findFirst({ where: { id: comicId, ...this.publicWhere }, select: { id: true } });
         if (!comic)
             throw new common_1.NotFoundException("Comic not found.");
         const rows = await this.db.chapter.findMany({
@@ -128,63 +173,89 @@ let ComicsService = class ComicsService {
         const { genreSlugs, ...data } = dto;
         const genres = await this.genreConnect(genreSlugs);
         const slug = await this.uniqueSlug(dto.title);
-        return this.db.$transaction(async (tx) => {
-            const comic = await tx.comic.create({ data: { ...data, slug, genres: { create: genres } }, include });
-            await tx.auditLog.create({ data: { actorId: actor, action: "comic.create", resource: "Comic", resourceId: comic.id } });
-            return comic;
+        const comic = await this.db.$transaction(async (tx) => {
+            const created = await tx.comic.create({ data: { ...data, slug, genres: { create: genres } }, include });
+            await tx.auditLog.create({ data: { actorId: actor, action: "comic.create", resource: "Comic", resourceId: created.id } });
+            return created;
         });
+        await this.invalidateHomeCaches();
+        return comic;
     }
     async update(id, dto, actor) {
         await this.validateCoverKey(dto.coverKey);
         await this.validateCoverKey(dto.bannerKey);
         const { genreSlugs, ...data } = dto;
         const genres = genreSlugs ? await this.genreConnect(genreSlugs) : undefined;
-        return this.db.$transaction(async (tx) => {
+        const comic = await this.db.$transaction(async (tx) => {
             const exists = await tx.comic.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
             if (!exists)
                 throw new common_1.NotFoundException("Comic not found.");
             if (genres)
                 await tx.comicGenre.deleteMany({ where: { comicId: id } });
-            const comic = await tx.comic.update({ where: { id }, data: { ...data, ...(genres && { genres: { create: genres } }) }, include });
+            const updated = await tx.comic.update({ where: { id }, data: { ...data, ...(genres && { genres: { create: genres } }) }, include });
             await tx.auditLog.create({ data: { actorId: actor, action: "comic.update", resource: "Comic", resourceId: id, meta: { fields: Object.keys(dto) } } });
-            return comic;
+            return updated;
         });
+        await this.invalidateHomeCaches();
+        return comic;
     }
     async remove(id, actor) {
         await this.db.$transaction(async (tx) => {
-            // Verify the comic first. A source-backed comic has a unique SourceTitle row;
-            // leaving that row attached after a soft delete makes the next provider
-            // approval think the title is still published. Remove the source mapping
-            // in the same transaction. SourceChapter mappings cascade from SourceTitle,
-            // while the archived Comic/Chapter history remains available for auditing.
             const current = await tx.comic.findFirst({
                 where: { id, deletedAt: null },
-                select: { id: true },
+                select: { id: true, title: true, slug: true },
             });
             if (!current)
                 throw new common_1.NotFoundException("Comic not found.");
-            const sourceTitle = await tx.sourceTitle.findUnique({
-                where: { comicId: id },
-                select: { id: true, sourceId: true, externalId: true },
+            const normCurrent = normalizeTitleKey(current.title);
+            const activeComics = await tx.comic.findMany({
+                where: { deletedAt: null },
+                select: { id: true, title: true, slug: true },
             });
-            if (sourceTitle) {
-                await tx.sourceTitle.delete({ where: { id: sourceTitle.id } });
-                await tx.auditLog.create({ data: {
-                        actorId: actor,
-                        action: "source.title.detach_on_comic_delete",
-                        resource: "SourceTitle",
-                        resourceId: sourceTitle.id,
-                        meta: { sourceId: sourceTitle.sourceId, externalId: sourceTitle.externalId, comicId: id },
-                    } });
+            const sameTitleComics = activeComics.filter((c) => c.id === current.id || (normCurrent && normalizeTitleKey(c.title) === normCurrent));
+            const targetIds = Array.from(new Set([current.id, ...sameTitleComics.map((c) => c.id)]));
+            const sourceTitles = await tx.sourceTitle.findMany({
+                where: { comicId: { in: targetIds } },
+                select: { id: true, sourceId: true, externalId: true, comicId: true },
+            });
+            if (sourceTitles.length > 0) {
+                await tx.sourceTitle.deleteMany({ where: { id: { in: sourceTitles.map((st) => st.id) } } });
+                for (const st of sourceTitles) {
+                    await tx.auditLog.create({
+                        data: {
+                            actorId: actor,
+                            action: "source.title.detach_on_comic_delete",
+                            resource: "SourceTitle",
+                            resourceId: st.id,
+                            meta: { sourceId: st.sourceId, externalId: st.externalId, comicId: st.comicId ?? id },
+                        },
+                    });
+                }
             }
-            await tx.comic.update({
-                where: { id },
-                data: { deletedAt: new Date(), publishState: "ARCHIVED" },
+            const now = new Date();
+            await tx.chapter.updateMany({
+                where: { comicId: { in: targetIds }, deletedAt: null },
+                data: { deletedAt: now, publishState: "ARCHIVED" },
             });
-            await tx.auditLog.create({ data: { actorId: actor, action: "comic.delete", resource: "Comic", resourceId: id } });
+            const targetRows = sameTitleComics.length ? sameTitleComics : [{ id: current.id, title: current.title, slug: current.slug }];
+            for (const row of targetRows) {
+                const archivedSlug = row.slug.includes("-deleted-")
+                    ? row.slug
+                    : `${row.slug.slice(0, 160)}-deleted-${row.id.slice(-8)}-${Date.now().toString(36)}`;
+                await tx.comic.update({
+                    where: { id: row.id },
+                    data: {
+                        deletedAt: now,
+                        publishState: "ARCHIVED",
+                        slug: archivedSlug,
+                    },
+                });
+                await tx.auditLog.create({
+                    data: { actorId: actor, action: "comic.delete", resource: "Comic", resourceId: row.id },
+                });
+            }
         });
-        // The home-page lists are cached independently of the database queries.
-        await Promise.all(["comics:trending", "comics:popular", "comics:latest"].map((key) => this.cache.delete(key)));
+        await this.invalidateHomeCaches();
     }
 };
 exports.ComicsService = ComicsService;

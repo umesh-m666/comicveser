@@ -3,14 +3,15 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "start:dev": "nest start --watch",
+    "start:dev": "prisma generate && nest start --watch",
     "db:seed": "tsx prisma/seed.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.650.0",

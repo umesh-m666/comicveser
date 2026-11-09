@@ -34,6 +34,11 @@ enum SourceTitleState {
   UNPUBLISHED
 }
 
+enum SourceTitleRole {
+  PRIMARY
+  CHAPTER_FALLBACK
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -158,7 +163,7 @@ model Comic {
   comments         Comment[]
   creators         CreatorComic[]
   licenses         ContentLicense[]
-  sourceTitle      SourceTitle?
+  sourceTitles     SourceTitle[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
@@ -529,7 +534,7 @@ model ExternalLibraryEntry {
   @@index([sourceId, externalId])
 }
 
-// An external title becomes a Comic only after an administrator approves it.
+// A Comic can have a PRIMARY SourceTitle (e.g. ComicK) and CHAPTER_FALLBACK SourceTitles (WeebCentral, Asura Scans).
 model SourceTitle {
   id           String           @id @default(cuid())
   sourceId     String
@@ -539,7 +544,8 @@ model SourceTitle {
   coverUrl     String?
   contentType  String
   state        SourceTitleState
-  comicId      String?          @unique
+  role         SourceTitleRole  @default(PRIMARY)
+  comicId      String?
   comic        Comic?           @relation(fields: [comicId], references: [id], onDelete: SetNull)
   reviewedById String?
   reviewedBy   User?            @relation("SourceTitleReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -550,6 +556,7 @@ model SourceTitle {
   updatedAt    DateTime         @updatedAt
 
   @@unique([sourceId, externalId])
+  @@unique([comicId, sourceId])
   @@index([state, updatedAt])
 }
 

@@ -52,15 +52,17 @@ const comicBrief = {
             select: { id: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } }
         } },
 };
-const visibleComic = {
-    publishState: "PUBLISHED",
-    deletedAt: null,
-    OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }],
-};
 let UserService = class UserService {
     db;
     constructor(db) {
         this.db = db;
+    }
+    get visibleComic() {
+        return {
+            publishState: "PUBLISHED",
+            deletedAt: null,
+            OR: this.db.publicComicOrFilter,
+        };
     }
     async profile(id) {
         const u = await this.db.user.findUniqueOrThrow({ where: { id }, include: { profile: true } });
@@ -84,7 +86,7 @@ let UserService = class UserService {
         ]);
     }
     async bookmarks(userId, q) {
-        const where = { userId, comic: { ...visibleComic, ...(q.q && { title: { contains: q.q, mode: "insensitive" } }) } };
+        const where = { userId, comic: { ...this.visibleComic, ...(q.q && { title: { contains: q.q, mode: "insensitive" } }) } };
         const take = 24;
         const [total, items] = await this.db.$transaction([
             this.db.bookmark.count({ where }),
@@ -97,24 +99,24 @@ let UserService = class UserService {
             }) };
     }
     async isBookmarked(userId, comicId) {
-        return { bookmarked: !!(await this.db.bookmark.findFirst({ where: { userId, comicId, comic: visibleComic }, select: { id: true } })) };
+        return { bookmarked: !!(await this.db.bookmark.findFirst({ where: { userId, comicId, comic: this.visibleComic }, select: { id: true } })) };
     }
     async addBookmark(userId, comicId) {
-        const c = await this.db.comic.findFirst({ where: { id: comicId, ...visibleComic }, select: { id: true } });
+        const c = await this.db.comic.findFirst({ where: { id: comicId, ...this.visibleComic }, select: { id: true } });
         if (!c)
             throw new common_1.NotFoundException("Comic not found.");
         await this.db.bookmark.upsert({ where: { userId_comicId: { userId, comicId } }, update: {}, create: { userId, comicId } }); // idempotent; DB unique prevents duplicates
     }
     async removeBookmark(userId, comicId) { await this.db.bookmark.deleteMany({ where: { userId, comicId } }); }
     async saveProgress(userId, d) {
-        const ch = await this.db.chapter.findFirst({ where: { id: d.chapterId, comicId: d.comicId, publishState: "PUBLISHED", deletedAt: null, comic: visibleComic, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] }, select: { id: true } });
+        const ch = await this.db.chapter.findFirst({ where: { id: d.chapterId, comicId: d.comicId, publishState: "PUBLISHED", deletedAt: null, comic: this.visibleComic, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] }, select: { id: true } });
         if (!ch)
             throw new common_1.BadRequestException("That chapter does not belong to this comic.");
         const data = { chapterId: d.chapterId, imageIndex: d.imageIndex, scrollY: d.scrollY };
         await this.db.readingHistory.upsert({ where: { userId_comicId: { userId, comicId: d.comicId } }, update: data, create: { userId, comicId: d.comicId, ...data } });
     }
     async history(userId) {
-        const rows = await this.db.readingHistory.findMany({ where: { userId, comic: visibleComic, chapter: { publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] } }, orderBy: { updatedAt: "desc" }, take: 50,
+        const rows = await this.db.readingHistory.findMany({ where: { userId, comic: this.visibleComic, chapter: { publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] } }, orderBy: { updatedAt: "desc" }, take: 50,
             include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true } } } } } });
         return rows.map((r) => {
             const { sourceChapter, ...chapter } = r.chapter;
@@ -122,7 +124,7 @@ let UserService = class UserService {
         });
     }
     async reviews(userId) {
-        const rows = await this.db.review.findMany({ where: { userId, deletedAt: null, comic: visibleComic }, orderBy: { createdAt: "desc" }, take: 100, include: { comic: { select: { slug: true, title: true } } } });
+        const rows = await this.db.review.findMany({ where: { userId, deletedAt: null, comic: this.visibleComic }, orderBy: { createdAt: "desc" }, take: 100, include: { comic: { select: { slug: true, title: true } } } });
         const ratings = await this.db.rating.findMany({ where: { userId, comicId: { in: rows.map((r) => r.comicId) } }, select: { comicId: true, value: true } });
         const rm = new Map(ratings.map((r) => [r.comicId, r.value]));
         return rows.map((r) => ({ id: r.id, body: r.body, helpfulCount: r.helpfulCount, createdAt: r.createdAt, comic: r.comic, rating: rm.get(r.comicId) ?? null }));

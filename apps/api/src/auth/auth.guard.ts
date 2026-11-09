@@ -2,7 +2,6 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetad
 import { Reflector } from "@nestjs/core";
 import { PrismaService } from "../prisma/prisma.service";
 import { sha256 } from "../common/crypto";
-import { webOrigins } from "../common/config";
 
 export const SESSION_COOKIE = "cv_session";
 export interface AuthUser { id: string; username: string; email: string; role: string; permissions: string[]; emailVerified: boolean; sessionId: string }
@@ -48,7 +47,7 @@ export const RequirePermission = (perm: string) => applyDecorators(SetMetadata("
 export const RequireAdmin = () => applyDecorators(SetMetadata("perm", "comic:write"), UseGuards(SessionGuard, AdminRoleGuard, PermissionGuard));
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext): AuthUser => ctx.switchToHttp().getRequest().user);
 
-// CSRF defence: every state-changing request must come from the web origin (this matters because the cookie may be SameSite=None).
+// CSRF defence: cookies are SameSite=Lax, and every state-changing request must come from the web origin.
 export const SkipOrigin = () => SetMetadata("skipOrigin", true);
 
 @Injectable()
@@ -59,7 +58,8 @@ export class OriginGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
     const origin = req.headers.origin as string | undefined;
-    if (!origin || !webOrigins().includes(origin)) throw new ForbiddenException("Request origin not allowed.");
+    const allowed = process.env.WEB_ORIGIN ?? "http://localhost:3000";
+    if (origin !== allowed) throw new ForbiddenException("Request origin not allowed.");
     return true;
   }
 }

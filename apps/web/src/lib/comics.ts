@@ -1,5 +1,5 @@
 // Data-access layer backed by the ComicVerse API.
-import { API, api, ApiError } from "./api";
+import { API, api } from "./api";
 export type ComicType = "Manga" | "Manhwa" | "Manhua" | "Webtoon";
 export type ComicStatus = "Ongoing" | "Completed" | "Hiatus";
 
@@ -16,11 +16,8 @@ export const TYPES: ComicType[] = ["Manga","Manhwa","Manhua","Webtoon"];
 export const STATUSES: ComicStatus[] = ["Ongoing","Completed","Hiatus"];
 export const SORTS = [
   ["updated","Latest updated"],["added","Recently added"],["popular","Most popular"],
-["alpha","Alphabetical"],
+  ["alpha","Alphabetical"],
 ] as const;
-
-
-
 
 const NO_CHAPTER: Chapter = { id: "", number: 0, title: "", publishedAt: new Date(0).toISOString() };
 export const latestChapter = (c: Comic): Chapter => c.latest ?? c.chapters[c.chapters.length - 1] ?? NO_CHAPTER;
@@ -46,6 +43,18 @@ export const toComic = (a: ApiComic, chapters: Chapter[] = []): Comic => ({
   coverUrl: a.coverUrl ? (/^https?:\/\//i.test(a.coverUrl) ? a.coverUrl : `${API}${a.coverUrl}`) : null,
 });
 
+function dedupeComicsByTitle(items: Comic[]): Comic[] {
+  const byTitle = new Map<string, Comic>();
+  for (const item of items) {
+    const key = item.title.trim().toLowerCase().replace(/^official\s+/i, "").replace(/[^a-z0-9]+/g, "") || item.id;
+    const prev = byTitle.get(key);
+    if (!prev || item.addedAt.localeCompare(prev.addedAt) > 0) {
+      byTitle.set(key, item);
+    }
+  }
+  return Array.from(byTitle.values());
+}
+
 export interface BrowseQuery {
   q?: string; genre?: string; type?: string; status?: string;
   minRating?: string; year?: string; sort?: string; page?: string;
@@ -62,13 +71,14 @@ export async function browseComics(p: BrowseQuery) {
   if (p.year && /^\d{4}$/.test(p.year)) sp.set("year", p.year);
   if (p.sort && SORTS.some(([v]) => v === p.sort)) sp.set("sort", p.sort);
   const r = await api<{ items: ApiComic[]; total: number; page: number; pages: number }>(`/comics?${sp}`, { cache: "no-store" });
-  return { total: r.total, page: r.page, pages: r.pages, items: r.items.map((a) => toComic(a)) };
+  const mapped = dedupeComicsByTitle(r.items.map((a) => toComic(a)));
+  return { total: Math.max(mapped.length, r.total - (r.items.length - mapped.length)), page: r.page, pages: r.pages, items: mapped };
 }
 
 export async function allComics() {
   try {
     const r = await api<{ items: ApiComic[] }>("/comics?pageSize=48&sort=popular", { cache: "no-store" });
-    return r.items.map((a) => toComic(a));
+    return dedupeComicsByTitle(r.items.map((a) => toComic(a)));
   } catch {
     return [];
   }
@@ -79,7 +89,7 @@ export async function getComic(slug: string): Promise<Comic | null> {
     const a = await api<ApiComic>(`/comics/${encodeURIComponent(slug)}`, { cache: "no-store" });
     const ch = await api<{ id: string; number: number; displayNumber?: string; title: string; publishedAt: string | null }[]>(`/comics/${a.id}/chapters?order=asc`, { cache: "no-store" });
     return toComic(a, ch.map(toChapter));
-  } catch (e) {
+  } catch {
     return null;
   }
 }

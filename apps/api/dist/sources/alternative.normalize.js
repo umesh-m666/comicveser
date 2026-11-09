@@ -9,7 +9,12 @@ exports.findMatchingSummary = findMatchingSummary;
 exports.buildAlternativeSourceMatch = buildAlternativeSourceMatch;
 exports.ALTERNATIVE_PROVIDER_IDS = ["weebcentral", "asurascans"];
 function normalizeMatchText(value) {
-    return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+    return value
+        .toLowerCase()
+        .replace(/^official\s+/i, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim()
+        .replace(/\s+/g, " ");
 }
 function titlesRoughlyMatch(a, b) {
     const na = normalizeMatchText(a);

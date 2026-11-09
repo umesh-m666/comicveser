@@ -3,7 +3,19 @@ import { ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { Authenticated, AuthUser, CurrentUser, RequireAdmin } from "../auth/auth.guard";
-import { ChaptersQuery, ImportAlternativeChaptersDto, PagesQuery, SaveExternalDto, SearchSourcesQuery, SourceTitleActionDto, UpdateSourceDto } from "./sources.dto";
+import {
+  ChaptersQuery,
+  ComicChaptersQuery,
+  FallbackCandidatesQuery,
+  ImportAlternativeChaptersDto,
+  ImportChaptersBodyDto,
+  LinkFallbackDto,
+  PagesQuery,
+  SaveExternalDto,
+  SearchSourcesQuery,
+  SourceTitleActionDto,
+  UpdateSourceDto,
+} from "./sources.dto";
 import { SourcesService } from "./sources.service";
 
 const SOURCE = "sourceId";
@@ -51,8 +63,17 @@ export class SourcesController {
   catalogChapters(@Param(SOURCE) id: string, @Param("externalId") ext: string, @Query() q: ChaptersQuery) { return this.svc.adminChapters(id, ext, q); }
   @RequireAdmin() @Get("admin/sources/catalog/:sourceId/:externalId/alternatives")
   catalogAlternatives(@Param(SOURCE) id: string, @Param("externalId") ext: string, @Query() q: ChaptersQuery) { return this.svc.adminAlternatives(id, ext, q.language); }
-  @RequireAdmin() @Get("admin/sources/comics/:comicId/chapters")
-  comicChapters(@Param("comicId") comicId: string, @Query() q: ChaptersQuery) { return this.svc.adminComicChapters(comicId, q); }
+
+  // ---- admin fallback management & chapter catalogue routes
+  @RequireAdmin() @Get("admin/sources/comics/:id/chapters")
+  comicChapters(@Param("id") comicId: string, @Query() q: ComicChaptersQuery) { return this.svc.adminComicChapters(comicId, q); }
+  @RequireAdmin() @Throttle({ default: { limit: 30, ttl: 60_000 } }) @Get("admin/sources/comics/:id/fallback-candidates")
+  fallbackCandidates(@Param("id") comicId: string, @Query() q: FallbackCandidatesQuery) { return this.svc.adminFallbackCandidates(comicId, q); }
+  @RequireAdmin() @Throttle({ default: { limit: 20, ttl: 60_000 } }) @HttpCode(200) @Post("admin/sources/comics/:id/fallbacks")
+  linkFallback(@CurrentUser() u: AuthUser, @Param("id") comicId: string, @Body() d: LinkFallbackDto) { return this.svc.linkFallbackSource(comicId, d, u.id); }
+  @RequireAdmin() @HttpCode(204) @Delete("admin/sources/comics/:id/fallbacks/:sourceId")
+  async unlinkFallback(@CurrentUser() u: AuthUser, @Param("id") comicId: string, @Param(SOURCE) sourceId: string) { await this.svc.unlinkFallbackSource(comicId, sourceId, u.id); }
+
   @RequireAdmin() @Throttle({ default: { limit: 10, ttl: 60_000 } }) @HttpCode(200) @Post("admin/sources/comics/:comicId/chapters/import-alternative")
   importAlternativeChapters(@CurrentUser() u: AuthUser, @Param("comicId") comicId: string, @Body() d: ImportAlternativeChaptersDto) {
     return this.svc.importAlternativeChaptersForComic(comicId, d.sourceId, d.externalId, { language: d.language ?? "en", page: d.page ?? 1, limit: d.limit ?? 500 }, u.id);
@@ -68,7 +89,9 @@ export class SourcesController {
   @RequireAdmin() @HttpCode(204) @Post("admin/sources/catalog/:sourceId/:externalId/republish")
   republish(@CurrentUser() u: AuthUser, @Param(SOURCE) id: string, @Param("externalId") ext: string) { return this.svc.republish(id, ext, u.id); }
   @RequireAdmin() @Throttle({ default: { limit: 10, ttl: 60_000 } }) @HttpCode(200) @Post("admin/sources/catalog/:sourceId/:externalId/chapters/import")
-  importChapters(@CurrentUser() u: AuthUser, @Param(SOURCE) id: string, @Param("externalId") ext: string, @Query() q: ChaptersQuery) { return this.svc.importChapterPage(id, ext, q, u.id); }
+  importChapters(@CurrentUser() u: AuthUser, @Param(SOURCE) id: string, @Param("externalId") ext: string, @Query() q: ChaptersQuery, @Body() body?: ImportChaptersBodyDto) {
+    return this.svc.importChapterPage(id, ext, q, u.id, body?.chapterIds);
+  }
 
   @RequireAdmin() @Throttle({ default: { limit: 240, ttl: 60_000 } }) @Get("admin/sources/:sourceId/cover/:mangaId/:file")
   async adminCover(@Param(SOURCE) id: string, @Param("mangaId") mangaId: string, @Param("file") file: string, @Res() res: Response) {

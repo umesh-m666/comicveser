@@ -17,7 +17,7 @@ const write = { default: { limit: 10, ttl: 60_000 } };
 export class ReviewsService {
   constructor(private db: PrismaService) {}
   private async comic(id: string) {
-    if (!(await this.db.comic.findFirst({ where: { id, publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] }, select: { id: true } }))) throw new NotFoundException("Comic not found.");
+    if (!(await this.db.comic.findFirst({ where: { id, publishState: "PUBLISHED", deletedAt: null, OR: this.db.publicComicOrFilter }, select: { id: true } }))) throw new NotFoundException("Comic not found.");
   }
 
   async list(comicId: string, page: number) {
@@ -73,7 +73,7 @@ export class ReviewsService {
   }
   async report(userId: string, d: ReportDto) {
     const exists = d.targetType === "REVIEW" ? await this.db.review.findFirst({ where: { id: d.targetId, deletedAt: null }, select: { id: true } })
-      : d.targetType === "COMIC" ? await this.db.comic.findFirst({ where: { id: d.targetId, publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] }, select: { id: true } }) : { id: d.targetId };
+      : d.targetType === "COMIC" ? await this.db.comic.findFirst({ where: { id: d.targetId, publishState: "PUBLISHED", deletedAt: null, OR: this.db.publicComicOrFilter }, select: { id: true } }) : { id: d.targetId };
     if (!exists) throw new NotFoundException("Nothing to report.");
     if (await this.db.report.findFirst({ where: { reporterId: userId, targetType: d.targetType, targetId: d.targetId, status: "OPEN" }, select: { id: true } })) return;
     await this.db.report.create({ data: { reporterId: userId, targetType: d.targetType, targetId: d.targetId, reason: d.reason } });

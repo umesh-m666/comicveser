@@ -66,7 +66,8 @@ function summaryFromLink(href, title, html, cardType) {
     if (!id || !sourceUrl)
         return null;
     const image = (0, html_1.voidElements)(html, "img")[0];
-    const resolvedTitle = (0, html_1.htmlText)(title) || (0, html_1.htmlText)(image?.alt ?? "");
+    const rawTitle = (0, html_1.htmlText)(title) || (0, html_1.htmlText)(image?.alt ?? "");
+    const resolvedTitle = rawTitle.replace(/^Official\s+/i, "").trim() || rawTitle;
     if (!resolvedTitle)
         return null;
     const type = normalizedContentType(cardType ?? "") !== "unknown"
