@@ -1,6 +1,6 @@
 import Link from "next/link";
 import AccountLink from "./AccountLink";
-import { BookOpen, Bookmark, Compass, Home, Search, User } from "lucide-react";
+import { BookOpen, Bookmark, Compass, Home, Search } from "lucide-react";
 
 const links = [
   { href: "/", label: "Home", Icon: Home },
@@ -30,19 +30,6 @@ export function Header() {
         <div className="shrink-0"><AccountLink /></div>
       </div>
     </header>
-  );
-}
-
-export function BottomNav() {
-  const items = [...links.slice(0, 3), { href: "/login", label: "Account", Icon: User }];
-  return (
-    <nav aria-label="Mobile" className="cv-mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t md:hidden">
-      {items.map(({ href, label, Icon }) => (
-        <Link key={href} href={href} className="flex flex-col items-center gap-1 py-2.5 text-[11px] text-muted hover:text-fg">
-          <Icon size={19} aria-hidden />{label}
-        </Link>
-      ))}
-    </nav>
   );
 }
 

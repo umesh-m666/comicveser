@@ -1,10 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import ProfileNav from "@/components/ProfileNav";
 import { State, btn, btnDanger, input } from "@/components/admin/ui";
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 import { act, errMsg, useLoad } from "@/lib/useApi";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -13,7 +13,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 const Msg = ({ ok, err }: { ok: string; err: string }) => <>{ok && <p role="status" className="mt-2 text-sm text-success">{ok}</p>}{err && <p role="alert" className="mt-2 text-sm text-danger">{err}</p>}</>;
 
 export default function Settings() {
-  const router = useRouter();
+  const { logout } = useAuth();
   const profile = useLoad<{ username: string; email: string; bio: string | null; createdAt: string }>("/user/profile");
   const notes = useLoad<{ prefs: { newChapter: boolean } }>("/user/notifications");
   const [m, setM] = useState<Record<string, { ok: string; err: string }>>({});
@@ -53,7 +53,7 @@ export default function Settings() {
           <button className={btnDanger} onClick={async () => {
             const password = prompt("To delete your account, enter your password:"); if (!password) return;
             if (!confirm("Delete your account permanently?")) return;
-            try { await act("/user/account", "DELETE", { password }); router.push("/"); router.refresh(); window.dispatchEvent(new Event("cv:notifications")); } catch (x) { set("d", "", errMsg(x)); } }}>Delete my account</button>
+            try { await act("/user/account", "DELETE", { password }); await logout(); } catch (x) { set("d", "", errMsg(x)); } }}>Delete my account</button>
           <Msg ok={m.d?.ok ?? ""} err={m.d?.err ?? ""} />
         </Section>
       </>)}

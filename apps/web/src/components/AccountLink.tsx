@@ -1,74 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "./AuthProvider";
 import { Bell, LogOut, PenLine, ShieldCheck, UserRound } from "lucide-react";
-
-type User = {
-  username: string;
-  role: string;
-};
 
 const pill =
   "group inline-flex items-center gap-2 rounded-xl border border-line bg-card px-3.5 py-2 text-sm font-medium text-fg transition-all duration-200 hover:border-primary active:scale-95";
 
+/** Desktop header actions. Mobile uses the bottom navigation, which links to /account. */
 export default function AccountLink() {
-  const router = useRouter();
-  const path = usePathname();
-
-  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const { user, status, logout } = useAuth();
   const [unread, setUnread] = useState(0);
 
-  const refresh = useCallback(() => {
-    let active = true;
-
-    api<User>("/auth/me", { credentials: "include" })
-      .then((data) => {
-        if (!active) return;
-        setUser(data);
-        api<{ unread: number }>("/user/notifications", { credentials: "include" })
-          .then((n) => active && setUnread(n.unread))
-          .catch(() => {});
-      })
-      .catch(() => {
-        if (active) setUser(null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // Re-check on every page change so the header updates right after login/logout.
-  useEffect(() => refresh(), [path, refresh]);
-
-  // Other components fire this after marking notifications as read.
+  // Unread-alert badge; reloaded whenever the signed-in user changes or notifications are marked read.
   useEffect(() => {
-    const onChange = () => {
-      refresh();
-    };
-    window.addEventListener("cv:notifications", onChange);
-    return () => window.removeEventListener("cv:notifications", onChange);
-  }, [refresh]);
+    if (!user) { setUnread(0); return; }
+    let live = true;
+    const load = () => api<{ unread: number }>("/user/notifications", { credentials: "include" }).then((n) => live && setUnread(n.unread)).catch(() => {});
+    load();
+    window.addEventListener("cv:notifications", load);
+    return () => { live = false; window.removeEventListener("cv:notifications", load); };
+  }, [user]);
 
-  const handleLogout = async () => {
-    try {
-      await api("/auth/logout", { method: "POST", credentials: "include" });
-    } catch (error) {
-      console.error("Logout failed:", error);
-    } finally {
-      setUser(null);
-      setUnread(0);
-      router.push("/");
-      router.refresh();
-    }
-  };
-
-  if (user === undefined) {
-    return <div className="hidden h-9 w-24 animate-pulse rounded-lg bg-card md:block" />;
-  }
+  if (status === "loading") return <div className="hidden h-9 w-24 animate-pulse rounded-lg bg-card md:block" />;
 
   if (!user) {
     return (
@@ -99,27 +55,23 @@ export default function AccountLink() {
         </Link>
       )}
 
-      {/* Notifications */}
       <Link href="/profile/notifications" className={pill} aria-label={`Alerts${unread ? `, ${unread} unread` : ""}`}>
         <Bell size={16} />
         <span>Alerts</span>
-        {unread > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-white">{unread}</span>
-        )}
+        {unread > 0 && <span className="rounded-full bg-primary px-1.5 text-xs font-semibold text-white">{unread}</span>}
       </Link>
 
-      {/* User Profile */}
-      <Link href="/profile/bookmarks" className={pill}>
+      {/* Account dashboard */}
+      <Link href="/account" className={pill}>
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface text-primary ring-1 ring-primary transition-transform duration-200 group-hover:scale-110">
           <UserRound size={16} />
         </span>
         <span className="max-w-28 truncate">{user.username}</span>
       </Link>
 
-      {/* Logout */}
       <button
         type="button"
-        onClick={handleLogout}
+        onClick={() => void logout()}
         className="group inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium text-muted transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 active:scale-95"
       >
         <LogOut size={16} className="transition-transform duration-200 group-hover:-translate-x-0.5" />

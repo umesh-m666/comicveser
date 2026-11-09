@@ -1,5 +1,7 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
+export const UNAUTHORIZED_EVENT = "cv:unauthorized";
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: string[]) { super(message); }
 }
@@ -22,6 +24,11 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   }
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, body?.error?.message ?? "Request failed.", body?.error?.details);
+  if (!res.ok) {
+    // Tell the AuthProvider a request was rejected as unauthenticated so it can re-verify the session with the backend
+    // (a wrong password also returns 401, so the provider confirms via /auth/me before it signs anyone out).
+    if (res.status === 401 && path !== "/auth/me" && typeof window !== "undefined") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    throw new ApiError(res.status, body?.error?.message ?? "Request failed.", body?.error?.details);
+  }
   return body as T;
 }

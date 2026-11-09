@@ -1,8 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, api } from "@/lib/api";
+import { useAuth } from "./AuthProvider";
+import { safeNext } from "@/lib/auth-redirect";
 
 type Mode = "login" | "register" | "forgot" | "reset" | "verify";
 const F = {
@@ -22,7 +24,11 @@ const CFG: Record<Mode, { title: string; endpoint: string; submit: string; field
 };
 
 export default function AuthForm({ mode, token }: { mode: Mode; token?: string }) {
-  const c = CFG[mode]; const router = useRouter();
+  const c = CFG[mode]; const router = useRouter(); const auth = useAuth();
+  const entry = mode === "login" || mode === "register";
+  const destination = () => safeNext(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null);
+  // A signed-in user never needs the login/register form: send them on to where they were going.
+  useEffect(() => { if (entry && auth.status === "authenticated") router.replace(destination()); }, [entry, auth.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const [pending, setPending] = useState(false); const [errors, setErrors] = useState<string[]>([]); const [done, setDone] = useState(false);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -33,15 +39,20 @@ export default function AuthForm({ mode, token }: { mode: Mode; token?: string }
     setPending(true);
     try {
       await api(c.endpoint, { method: "POST", json: token ? { ...data, token } : data, credentials: "include" });
-      if (mode === "login") { router.push("/"); router.refresh(); } else setDone(true);
+      if (mode === "login") { await auth.refresh(); router.replace(destination()); router.refresh(); } else setDone(true);
     } catch (err) {
       setErrors(err instanceof ApiError ? (err.details?.length ? err.details : [err.message]) : ["Something went wrong. Try again."]);
     } finally { setPending(false); }
   }
 
+  // Don't flash the form while the session check runs or while an already-signed-in user is being redirected.
+  if (entry && (auth.status === "loading" || auth.status === "authenticated"))
+    return <div className="mx-auto max-w-sm py-8" aria-busy="true"><div className="skeleton h-8 w-40" /><div className="skeleton mt-4 h-44" /></div>;
+
   return (
     <div className="mx-auto max-w-sm py-8">
       <h1 className="text-2xl font-bold">{c.title}</h1>
+      {mode === "login" && auth.expired && <p role="status" className="mt-3 rounded-md border border-line bg-card p-3 text-sm">Your session has expired. Please log in again.</p>}
       {done ? (
         <div className="mt-4"><p role="status" className="text-success">{c.done}</p><Link href="/login" className="mt-4 inline-block text-primary">Go to log in</Link></div>
       ) : (
