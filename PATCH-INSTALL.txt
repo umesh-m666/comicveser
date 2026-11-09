@@ -1,0 +1,25 @@
+COMICVERSE — COMICK CHAPTER PAGINATION FIX
+
+1. Stop both API and web dev servers (Ctrl+C in both terminals).
+2. Extract this ZIP directly into your existing ComicVerse project ROOT:
+   C:\Users\LenoVo\Desktop\umesh\comicverse
+   Choose Merge/Replace when Windows asks.
+3. Do NOT delete or replace apps/api/.env.
+4. Rebuild and start the API:
+   cd apps/api
+   npm run build
+   npm run start:dev
+5. Restart the web app in a second terminal:
+   cd apps/web
+   npm run dev
+6. Open Admin > Comics > ComicK and open a title again. The chapter catalogue
+   requests 20 chapters per page rather than 500. Use Next for later pages.
+
+If it still returns HTTP 403, run this exact request in PowerShell (replace
+HID with the title's provider ID):
+
+curl.exe -i --max-time 20 "https://api.comick.dev/comic/HID/chapters?page=1&limit=20&lang=en" `
+  -H "Accept: application/json" `
+  -H "User-Agent: Mozilla/5.0"
+
+A 403 on that request means ComicK is still challenging the chapter route itself.

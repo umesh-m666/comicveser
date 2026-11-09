@@ -1,0 +1,51 @@
+services:
+  # ----------------------------------------------------
+  # 1. NestJS Backend API
+  # ----------------------------------------------------
+  - type: web
+    name: comicverse-api
+    runtime: node
+    rootDir: apps/api
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm run db:seed && npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: comicverse-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: comicverse-web
+          property: host
+
+  # ----------------------------------------------------
+  # 2. Next.js Frontend Web App
+  # ----------------------------------------------------
+  - type: web
+    name: comicverse-web
+    runtime: node
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: comicverse-api
+          property: host
+          # Will resolve to https://<comicverse-api>.onrender.com/api
+
+databases:
+  - name: comicverse-db
+    databaseName: comicverse
+    user: comicverse_user
+    plan: free

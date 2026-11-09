@@ -1,0 +1,18 @@
+ComicK diagnostic patch
+
+1. Back up your current project.
+2. Extract this ZIP into the EXISTING ComicVerse project root (the folder containing apps/). Merge/overwrite when asked.
+3. Open PowerShell and run:
+
+   cd .\apps\api
+   node .\scripts\test-comick-node.cjs
+
+This runs the same Node fetch runtime/header shape used by the backend against three endpoints.
+4. Then rebuild/restart the API:
+
+   npm run build
+   npm run start:dev
+
+The NestJS log now prints the safe ComicK SourceError message after SOURCE_UNAVAILABLE, including HTTP/Cloudflare or network error details where available.
+
+Do not share your .env file or tokens. The diagnostic script does not print secrets.

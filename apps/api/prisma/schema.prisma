@@ -1,0 +1,575 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ComicType {
+  MANGA
+  MANHWA
+  MANHUA
+  WEBTOON
+}
+
+enum ComicStatus {
+  ONGOING
+  COMPLETED
+  HIATUS
+}
+
+enum PublishState {
+  DRAFT
+  PENDING
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum SourceTitleState {
+  APPROVED
+  REJECTED
+  UNPUBLISHED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum CreatorStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationType {
+  NEW_CHAPTER
+  BOOKMARK_UPDATE
+  CREATOR_ANNOUNCEMENT
+  REVIEW_REPLY
+  ACCOUNT
+  PLATFORM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  EXPIRED
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  permissions Permission[]
+  users       User[]
+}
+
+model Permission {
+  id    String @id @default(cuid())
+  key   String @unique
+  roles Role[]
+}
+
+model User {
+  id                   String                 @id @default(cuid())
+  username             String                 @unique
+  email                String                 @unique
+  passwordHash         String
+  emailVerifiedAt      DateTime?
+  status               UserStatus             @default(ACTIVE)
+  roleId               String
+  role                 Role                   @relation(fields: [roleId], references: [id])
+  profile              UserProfile?
+  creator              Creator?
+  bookmarks            Bookmark[]
+  history              ReadingHistory[]
+  ratings              Rating[]
+  reviews              Review[]
+  comments             Comment[]
+  notifications        Notification[]
+  reports              Report[]
+  auditLogs            AuditLog[]
+  subscriptions        Subscription[]
+  payments             Payment[]
+  sessions             Session[]
+  reviewVotes          ReviewVote[]
+  externalLibrary      ExternalLibraryEntry[]
+  reviewedSourceTitles SourceTitle[]          @relation("SourceTitleReviewer")
+  authTokens           AuthToken[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+}
+
+model UserProfile {
+  userId       String  @id
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarUrl    String?
+  bio          String?
+  readingPrefs Json?
+  notifyPrefs  Json?
+}
+
+model Comic {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  title            String
+  altTitle         String?
+  description      String
+  author           String
+  artist           String
+  type             ComicType
+  status           ComicStatus      @default(ONGOING)
+  publishState     PublishState     @default(DRAFT)
+  releaseYear      Int
+  coverKey         String?
+  externalCoverUrl String?
+  bannerKey        String?
+  views            Int              @default(0)
+  chapters         Chapter[]
+  genres           ComicGenre[]
+  bookmarks        Bookmark[]
+  history          ReadingHistory[]
+  ratings          Rating[]
+  reviews          Review[]
+  comments         Comment[]
+  creators         CreatorComic[]
+  licenses         ContentLicense[]
+  sourceTitle      SourceTitle?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  deletedAt        DateTime?
+
+  @@index([publishState, updatedAt])
+  @@index([publishState, views])
+  @@index([title])
+}
+
+model Chapter {
+  id            String           @id @default(cuid())
+  comicId       String
+  comic         Comic            @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  number        Float
+  title         String
+  publishState  PublishState     @default(DRAFT)
+  publishedAt   DateTime?
+  scheduledAt   DateTime?
+  images        ChapterImage[]
+  sourceChapter SourceChapter?
+  history       ReadingHistory[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([comicId, number])
+  @@index([comicId, publishState, publishedAt])
+}
+
+model ChapterImage {
+  id         String  @id @default(cuid())
+  chapterId  String
+  chapter    Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  position   Int
+  storageKey String
+  width      Int
+  height     Int
+  sha256     String
+
+  @@unique([chapterId, position])
+  @@unique([chapterId, sha256])
+}
+
+model Genre {
+  id     String       @id @default(cuid())
+  slug   String       @unique
+  name   String       @unique
+  comics ComicGenre[]
+}
+
+model ComicGenre {
+  comicId String
+  genreId String
+  comic   Comic  @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([comicId, genreId])
+  @@index([genreId])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  comicId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic     Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, comicId])
+}
+
+model ReadingHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  comicId    String
+  chapterId  String
+  imageIndex Int      @default(0)
+  scrollY    Int      @default(0)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic      Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  chapter    Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, comicId])
+  @@index([userId, updatedAt])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  userId    String
+  comicId   String
+  value     Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic     Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, comicId])
+}
+
+model Review {
+  id           String       @id @default(cuid())
+  userId       String
+  comicId      String
+  body         String
+  helpfulCount Int          @default(0)
+  votes        ReviewVote[]
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic        Comic        @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([userId, comicId])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  userId    String
+  comicId   String
+  parentId  String?
+  body      String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic     Comic     @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("Replies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("Replies")
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  publishAt   DateTime?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Banner {
+  id        String    @id @default(cuid())
+  imageKey  String
+  href      String
+  priority  Int       @default(0)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Creator {
+  id          String         @id @default(cuid())
+  userId      String         @unique
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName String
+  status      CreatorStatus  @default(PENDING)
+  comics      CreatorComic[]
+  createdAt   DateTime       @default(now())
+}
+
+model CreatorComic {
+  creatorId String
+  comicId   String
+  creator   Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  comic     Comic   @relation(fields: [comicId], references: [id], onDelete: Cascade)
+
+  @@id([creatorId, comicId])
+}
+
+model ContentLicense {
+  id          String    @id @default(cuid())
+  comicId     String
+  comic       Comic     @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  holder      String
+  licenseType String
+  territory   String?
+  documentKey String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  reporterId String
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType String
+  targetId   String
+  reason     String
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorLabel String?
+  action     String
+  resource   String
+  resourceId String?
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}
+
+model Novel {
+  id           String         @id @default(cuid())
+  slug         String         @unique
+  title        String
+  author       String
+  description  String
+  genres       String[]
+  status       ComicStatus    @default(ONGOING)
+  publishState PublishState   @default(DRAFT)
+  coverKey     String?
+  chapters     NovelChapter[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+}
+
+model NovelChapter {
+  id           String       @id @default(cuid())
+  novelId      String
+  novel        Novel        @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  number       Float
+  title        String
+  body         String
+  publishState PublishState @default(DRAFT)
+  publishedAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  @@unique([novelId, number])
+}
+
+model SubscriptionPlan {
+  id             String         @id @default(cuid())
+  code           String         @unique
+  name           String
+  priceMinor     Int
+  currency       String         @default("INR")
+  intervalMonths Int
+  active         Boolean        @default(true)
+  subscriptions  Subscription[]
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  userId           String
+  planId           String
+  user             User               @relation(fields: [userId], references: [id])
+  plan             SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime
+  providerRef      String?            @unique
+  payments         Payment[]
+  createdAt        DateTime           @default(now())
+
+  @@index([userId, status])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  userId            String
+  subscriptionId    String?
+  user              User          @relation(fields: [userId], references: [id])
+  subscription      Subscription? @relation(fields: [subscriptionId], references: [id])
+  amountMinor       Int
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  providerOrderId   String        @unique
+  providerPaymentId String?       @unique
+  planCode          String
+  createdAt         DateTime      @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+model ReviewVote {
+  userId   String
+  reviewId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@id([userId, reviewId])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  type      String
+  userId    String?
+  comicId   String?
+  chapterId String?
+  path      String?
+  query     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@index([comicId])
+}
+
+// Admin-editable settings for external sources (enable/disable, display name).
+model SourceSetting {
+  sourceId    String   @id
+  enabled     Boolean  @default(true)
+  displayName String?
+  updatedAt   DateTime @updatedAt
+}
+
+// A reader's saved title from an external source. Metadata and a link back only; no chapters or images are stored.
+model ExternalLibraryEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId    String
+  externalId  String
+  title       String
+  coverUrl    String?
+  sourceUrl   String
+  contentType String
+  status      String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, sourceId, externalId])
+  @@index([userId, createdAt])
+  @@index([sourceId, externalId])
+}
+
+// An external title becomes a Comic only after an administrator approves it.
+model SourceTitle {
+  id           String           @id @default(cuid())
+  sourceId     String
+  externalId   String
+  title        String
+  sourceUrl    String
+  coverUrl     String?
+  contentType  String
+  state        SourceTitleState
+  comicId      String?          @unique
+  comic        Comic?           @relation(fields: [comicId], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedBy   User?            @relation("SourceTitleReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  reviewNote   String?
+  chapters     SourceChapter[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([sourceId, externalId])
+  @@index([state, updatedAt])
+}
+
+// External chapter IDs and original labels are stored separately from Chapter.number.
+model SourceChapter {
+  id            String      @id @default(cuid())
+  sourceTitleId String
+  sourceTitle   SourceTitle @relation(fields: [sourceTitleId], references: [id], onDelete: Cascade)
+  chapterId     String      @unique
+  chapter       Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  externalId    String
+  numberLabel   String?
+  title         String?
+  volume        String?
+  sourceUrl     String
+  language      String?
+  publishedAt   DateTime?
+  pageCount     Int?
+  groups        String[]    @default([])
+
+  @@unique([sourceTitleId, externalId])
+  @@index([sourceTitleId, chapterId])
+}
