@@ -1,22 +1,24 @@
 # Dependencies
-**/node_modules
-/.pnp
-.pnp.js
+node_modules/
+**/node_modules/
+!apps/api/vendor/node_modules/
+!apps/api/vendor/node_modules/**
 
-# Next.js & Nest build output
-apps/web/.next/
+# Build output
 .next/
-**/ .next/
-/build
-/dist
+**/.next/
+dist/
 **/dist/
+!apps/api/vendor/node_modules/**/dist/
+*.tsbuildinfo
 
-# Misc & Env
+# Env
+.env
+.env.local
+.env.*.local
+
+# Misc
 .DS_Store
 *.pem
-.env
-.env*.local
-.env.local
 .vercel
-*.tsbuildinfo
-**/ *.tsbuildinfo
+apps/api/uploads/

@@ -1,11 +1,4 @@
 {
   "name": "comicverse",
-  "private": true,
-  "workspaces": [
-    "apps/*"
-  ],
-  "scripts": {
-    "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
-    "start": "npm run start --workspace=apps/api"
-  }
+  "private": true
 }
