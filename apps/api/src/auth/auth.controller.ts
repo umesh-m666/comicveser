@@ -6,7 +6,15 @@ import { AuthService } from "./auth.service";
 import { Authenticated, AuthUser, CurrentUser, SESSION_COOKIE } from "./auth.guard";
 import { ForgotDto, LoginDto, RegisterDto, ResetDto, VerifyDto } from "./dto/auth.dto";
 
-const cookieOpts = () => ({ httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", domain: process.env.COOKIE_DOMAIN || undefined });
+// If the web app and API sit on different sites (e.g. two *.onrender.com subdomains, which browsers treat as cross-site),
+// the session cookie must be SameSite=None; Secure or the browser never sends it. With a shared parent domain
+// (COOKIE_DOMAIN set) Lax is enough. Override with COOKIE_SAMESITE=lax|none|strict. CSRF stays covered by OriginGuard.
+const sameSite = (): "lax" | "none" | "strict" => {
+  const v = process.env.COOKIE_SAMESITE?.toLowerCase();
+  if (v === "lax" || v === "none" || v === "strict") return v;
+  return process.env.NODE_ENV === "production" && !process.env.COOKIE_DOMAIN ? "none" : "lax";
+};
+const cookieOpts = () => ({ httpOnly: true, sameSite: sameSite(), secure: process.env.NODE_ENV === "production", path: "/", domain: process.env.COOKIE_DOMAIN || undefined });
 const strict = { default: { limit: 5, ttl: 60_000 } };
 
 @ApiTags("auth")

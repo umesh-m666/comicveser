@@ -47,7 +47,7 @@ export const RequirePermission = (perm: string) => applyDecorators(SetMetadata("
 export const RequireAdmin = () => applyDecorators(SetMetadata("perm", "comic:write"), UseGuards(SessionGuard, AdminRoleGuard, PermissionGuard));
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext): AuthUser => ctx.switchToHttp().getRequest().user);
 
-// CSRF defence: cookies are SameSite=Lax, and every state-changing request must come from the web origin.
+// CSRF defence: every state-changing request must come from the web origin (this matters because the cookie may be SameSite=None).
 export const SkipOrigin = () => SetMetadata("skipOrigin", true);
 
 @Injectable()

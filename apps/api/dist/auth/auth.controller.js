@@ -19,7 +19,16 @@ const throttler_1 = require("@nestjs/throttler");
 const auth_service_1 = require("./auth.service");
 const auth_guard_1 = require("./auth.guard");
 const auth_dto_1 = require("./dto/auth.dto");
-const cookieOpts = () => ({ httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", domain: process.env.COOKIE_DOMAIN || undefined });
+// If the web app and API sit on different sites (e.g. two *.onrender.com subdomains, which browsers treat as cross-site),
+// the session cookie must be SameSite=None; Secure or the browser never sends it. With a shared parent domain
+// (COOKIE_DOMAIN set) Lax is enough. Override with COOKIE_SAMESITE=lax|none|strict. CSRF stays covered by OriginGuard.
+const sameSite = () => {
+    const v = process.env.COOKIE_SAMESITE?.toLowerCase();
+    if (v === "lax" || v === "none" || v === "strict")
+        return v;
+    return process.env.NODE_ENV === "production" && !process.env.COOKIE_DOMAIN ? "none" : "lax";
+};
+const cookieOpts = () => ({ httpOnly: true, sameSite: sameSite(), secure: process.env.NODE_ENV === "production", path: "/", domain: process.env.COOKIE_DOMAIN || undefined });
 const strict = { default: { limit: 5, ttl: 60_000 } };
 let AuthController = class AuthController {
     svc;
