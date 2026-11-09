@@ -28,7 +28,7 @@ async function bootstrap() {
     app.use((0, compression_1.default)());
     app.use((0, cookie_parser_1.default)());
     app.setGlobalPrefix("api");
-    app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:3000", credentials: true });
+    app.enableCors({ origin: (0, config_1.webOrigins)(), credentials: true });
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new errors_1.AllExceptionsFilter());
     app.enableShutdownHooks();

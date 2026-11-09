@@ -8,7 +8,7 @@ const BROWSER_LIKE = /mozilla|chrome|safari|firefox|edge|opera/i;
  */
 function loadSourcesConfig(env = process.env) {
     const enabled = (env.SOURCES_ENABLED ?? "false").trim().toLowerCase() === "true";
-    const web = env.WEB_ORIGIN?.trim() || "http://localhost:3000";
+    const web = env.WEB_ORIGIN?.split(",")[0]?.trim() || "http://localhost:3000";
     const cfg = {
         enabled,
         timeoutMs: env.SOURCES_TIMEOUT_MS?.trim() ? Number(env.SOURCES_TIMEOUT_MS) : 10_000,
