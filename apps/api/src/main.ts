@@ -8,7 +8,7 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
-import { assertProductionConfig } from "./common/config";
+import { assertProductionConfig, webOrigins } from "./common/config";
 import { AllExceptionsFilter } from "./common/errors";
 import { NestExpressApplication } from "@nestjs/platform-express";
 
@@ -27,7 +27,7 @@ async function bootstrap() {
   app.use(compression());
   app.use(cookieParser());
   app.setGlobalPrefix("api");
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:3000", credentials: true });
+  app.enableCors({ origin: webOrigins(), credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableShutdownHooks();

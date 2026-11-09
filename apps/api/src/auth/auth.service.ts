@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
+import { primaryWebOrigin } from "../common/config";
 import * as argon2 from "argon2";
 import { AuthTokenType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -18,7 +19,7 @@ export class AuthService {
   private async safeSend(to: string, subject: string, text: string) {
     try { await this.mail.send(to, subject, text); } catch (e) { this.log.error(`Email to user failed: ${(e as Error).message}`); }
   }
-  private web = () => process.env.WEB_ORIGIN ?? "http://localhost:3000";
+  private web = () => primaryWebOrigin();
 
   private async issueToken(userId: string, type: AuthTokenType, hours: number) {
     const token = randomToken();

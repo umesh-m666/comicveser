@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetad
 import { Reflector } from "@nestjs/core";
 import { PrismaService } from "../prisma/prisma.service";
 import { sha256 } from "../common/crypto";
+import { webOrigins } from "../common/config";
 
 export const SESSION_COOKIE = "cv_session";
 export interface AuthUser { id: string; username: string; email: string; role: string; permissions: string[]; emailVerified: boolean; sessionId: string }
@@ -58,8 +59,7 @@ export class OriginGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest();
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
     const origin = req.headers.origin as string | undefined;
-    const allowed = process.env.WEB_ORIGIN ?? "http://localhost:3000";
-    if (origin !== allowed) throw new ForbiddenException("Request origin not allowed.");
+    if (!origin || !webOrigins().includes(origin)) throw new ForbiddenException("Request origin not allowed.");
     return true;
   }
 }

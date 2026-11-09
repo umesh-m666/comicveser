@@ -4,11 +4,15 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: string[]) { super(message); }
 }
 
+// In the browser we call API (a full URL, or a relative "/api" when the web host proxies to the backend).
+// During server-side rendering a relative URL cannot be fetched, so API_INTERNAL_URL (the real backend URL) is used instead.
+const serverBase = () => (typeof window === "undefined" && process.env.API_INTERNAL_URL ? process.env.API_INTERNAL_URL : API);
+
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, ...rest } = init;
   let res: Response;
   try {
-    res = await fetch(API + path, {
+    res = await fetch(serverBase() + path, {
       ...rest,
       headers: { ...(json !== undefined ? { "Content-Type": "application/json" } : {}), ...rest.headers },
       body: json !== undefined ? JSON.stringify(json) : rest.body,

@@ -35,3 +35,10 @@ API_PUBLIC_URL, S3_*, MAIL_PROVIDER (+ RESEND_API_KEY, MAIL_FROM). Redeploy.
 
 ## 6. Render web service
 `NEXT_PUBLIC_API_URL` = https://<api-host>/api, then Clear build cache & deploy.
+
+## Local front-end work when your network blocks port 5432
+Some networks block outbound Postgres ports, so your PC cannot reach Supabase. HTTPS is not blocked, so run the web app locally against the live API:
+1. Render API service -> Environment -> `WEB_ORIGIN` = `https://<your-web>.onrender.com,http://localhost:3001` (comma-separated), then redeploy.
+2. `apps/web/.env.local` -> `NEXT_PUBLIC_API_URL=https://<your-api>.onrender.com/api`
+3. `cd apps/web && npx next dev -p 3001`
+(Running the API itself locally still needs to reach Supabase: use a hotspot/VPN, or Docker Postgres.)
