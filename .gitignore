@@ -3,7 +3,7 @@
 /.pnp
 .pnp.js
 
-# Build outputs
+# Next.js & Nest build output
 apps/web/.next/
 .next/
 **/ .next/
@@ -11,7 +11,7 @@ apps/web/.next/
 /dist
 **/dist/
 
-# Env & Misc
+# Misc & Env
 .DS_Store
 *.pem
 .env
