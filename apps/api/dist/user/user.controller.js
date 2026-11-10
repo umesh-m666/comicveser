@@ -31,9 +31,15 @@ let UserController = class UserController {
     isBookmarked(u, id) { return this.svc.isBookmarked(u.id, id); }
     add(u, d) { return this.svc.addBookmark(u.id, d.comicId); }
     remove(u, id) { return this.svc.removeBookmark(u.id, id); }
+    setStatus(u, id, d) { return this.svc.setBookmarkStatus(u.id, id, d.status); }
     progress(u, d) { return this.svc.saveProgress(u.id, d); }
     reviews(u) { return this.svc.reviews(u.id); }
     deleteAccount(u, d) { return this.svc.deleteAccount(u.id, d.password); }
+    /** Marks a chapter as finished (persists the purple "read" state). The reader calls this once the chapter is completed. */
+    markRead(u, id) { return this.svc.markChapterRead(u.id, id); }
+    readChapterIds(u, id) { return this.svc.readChapterIds(u.id, id); }
+    readChapters(u) { return this.svc.readChapters(u.id); }
+    stats(u) { return this.svc.stats(u.id); }
     history(u) { return this.svc.history(u.id); }
 };
 exports.UserController = UserController;
@@ -97,6 +103,16 @@ __decorate([
 ], UserController.prototype, "remove", null);
 __decorate([
     (0, common_1.HttpCode)(204),
+    (0, common_1.Put)("bookmarks/:comicId/status"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("comicId")),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, user_dto_1.BookmarkStatusDto]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "setStatus", null);
+__decorate([
+    (0, common_1.HttpCode)(204),
     (0, common_1.Post)("progress"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
@@ -121,6 +137,37 @@ __decorate([
     __metadata("design:paramtypes", [Object, user_dto_1.DeleteAccountDto]),
     __metadata("design:returntype", void 0)
 ], UserController.prototype, "deleteAccount", null);
+__decorate([
+    (0, common_1.HttpCode)(204),
+    (0, common_1.Post)("chapters/:chapterId/read"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("chapterId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "markRead", null);
+__decorate([
+    (0, common_1.Get)("comics/:comicId/read-chapters"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("comicId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "readChapterIds", null);
+__decorate([
+    (0, common_1.Get)("read-chapters"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "readChapters", null);
+__decorate([
+    (0, common_1.Get)("stats"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UserController.prototype, "stats", null);
 __decorate([
     (0, common_1.Get)("history"),
     __param(0, (0, auth_guard_1.CurrentUser)()),

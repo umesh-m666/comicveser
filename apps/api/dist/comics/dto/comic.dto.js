@@ -104,6 +104,8 @@ class ListComicsQuery {
     minRating;
     year;
     sort;
+    creator;
+    minChapters;
     page = 1;
     pageSize = 12;
 }
@@ -117,6 +119,7 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 200),
     __metadata("design:type", String)
 ], ListComicsQuery.prototype, "genre", void 0);
 __decorate([
@@ -145,9 +148,23 @@ __decorate([
 ], ListComicsQuery.prototype, "year", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(["updated", "added", "popular", "alpha"]),
+    (0, class_validator_1.IsEnum)(["updated", "added", "popular", "alpha", "rating", "chapters"]),
     __metadata("design:type", String)
 ], ListComicsQuery.prototype, "sort", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 100),
+    __metadata("design:type", String)
+], ListComicsQuery.prototype, "creator", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(5000),
+    __metadata("design:type", Number)
+], ListComicsQuery.prototype, "minChapters", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),

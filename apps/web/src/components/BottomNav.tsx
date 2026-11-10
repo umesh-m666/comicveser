@@ -1,29 +1,26 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Compass, Home, User } from "lucide-react";
+import { TABS, tabIndex } from "@/lib/nav";
 
-// Account always points at /account. That page reads the real session (via AuthProvider) and shows the dashboard to
-// signed-in users or the Log in / Create account options to everyone else, so this link never needs to guess.
-const items = [
-  { href: "/", label: "Home", Icon: Home },
-  { href: "/browse", label: "Discover", Icon: Compass },
-  { href: "/manga", label: "Manga", Icon: BookOpen },
-  { href: "/account", label: "Account", Icon: User },
-];
-
+/**
+ * Fixed mobile/tablet tab bar. One purple pill slides between the five destinations (a single transformed element,
+ * so it stays smooth on low-end phones) and the active icon scales up. Hidden from `lg` where the header links take over.
+ */
 export default function BottomNav() {
   const path = usePathname();
-  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/") ||
-    (href === "/account" && (path.startsWith("/profile") || path.startsWith("/admin") || path.startsWith("/creator") || path === "/login" || path === "/register")));
+  const active = tabIndex(path);
   return (
-    <nav aria-label="Mobile" className="cv-mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t pb-[env(safe-area-inset-bottom)] md:hidden">
-      {items.map(({ href, label, Icon }) => (
-        <Link key={href} href={href} aria-current={active(href) ? "page" : undefined}
-          className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-1 py-2 text-[11px] hover:text-fg ${active(href) ? "text-primary" : "text-muted"}`}>
-          <Icon size={19} aria-hidden />{label}
-        </Link>
-      ))}
+    <nav aria-label="Primary" className="cv-tabbar lg:hidden">
+      <div className="relative grid grid-cols-5">
+        <span aria-hidden className="cv-tabbar-ind" style={{ transform: `translateX(${Math.max(active, 0) * 100}%)`, opacity: active >= 0 ? 1 : 0 }}><span /></span>
+        {TABS.map(({ href, label, Icon }, i) => (
+          <Link key={href} href={href} aria-current={i === active ? "page" : undefined} className="cv-tab-link">
+            <Icon size={20} className="cv-tab-icon" aria-hidden />
+            {label}
+          </Link>
+        ))}
+      </div>
     </nav>
   );
 }

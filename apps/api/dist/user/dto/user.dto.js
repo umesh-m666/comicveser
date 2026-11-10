@@ -9,9 +9,10 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DeleteAccountDto = exports.BookmarkQuery = exports.ChangePasswordDto = exports.UpdateProfileDto = exports.ProgressDto = exports.BookmarkDto = void 0;
+exports.DeleteAccountDto = exports.BookmarkStatusDto = exports.BookmarkQuery = exports.ChangePasswordDto = exports.UpdateProfileDto = exports.ProgressDto = exports.BookmarkDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+const bookmark_status_1 = require("../bookmark-status");
 class BookmarkDto {
     comicId;
 }
@@ -83,8 +84,12 @@ __decorate([
 ], ChangePasswordDto.prototype, "next", void 0);
 class BookmarkQuery {
     q;
+    /** updated = recently updated, added = recently added, title = A-Z ("recent" is the legacy name for added). */
     sort;
+    /** One shelf, or omitted / "ALL" for everything. */
+    status;
     page = 1;
+    limit = 24;
 }
 exports.BookmarkQuery = BookmarkQuery;
 __decorate([
@@ -95,9 +100,14 @@ __decorate([
 ], BookmarkQuery.prototype, "q", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsIn)(bookmark_status_1.BOOKMARK_SORTS),
     __metadata("design:type", String)
 ], BookmarkQuery.prototype, "sort", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)([...bookmark_status_1.BOOKMARK_STATUSES, "ALL"]),
+    __metadata("design:type", String)
+], BookmarkQuery.prototype, "status", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
@@ -105,6 +115,23 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], BookmarkQuery.prototype, "page", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(60),
+    __metadata("design:type", Number)
+], BookmarkQuery.prototype, "limit", void 0);
+class BookmarkStatusDto {
+    /** A shelf, or AUTO to go back to the automatic status. */
+    status;
+}
+exports.BookmarkStatusDto = BookmarkStatusDto;
+__decorate([
+    (0, class_validator_1.IsIn)([...bookmark_status_1.BOOKMARK_STATUSES, "AUTO"]),
+    __metadata("design:type", String)
+], BookmarkStatusDto.prototype, "status", void 0);
 class DeleteAccountDto {
     password;
 }

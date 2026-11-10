@@ -12,10 +12,11 @@ const auth_controller_1 = require("./auth.controller");
 const auth_service_1 = require("./auth.service");
 const user_controller_1 = require("../user/user.controller");
 const user_service_1 = require("../user/user.service");
+const storage_service_1 = require("../storage/storage.service");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
-    (0, common_1.Module)({ controllers: [auth_controller_1.AuthController, user_controller_1.UserController], providers: [auth_service_1.AuthService, user_service_1.UserService] })
+    (0, common_1.Module)({ controllers: [auth_controller_1.AuthController, user_controller_1.UserController], providers: [auth_service_1.AuthService, user_service_1.UserService, storage_service_1.StorageService] })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

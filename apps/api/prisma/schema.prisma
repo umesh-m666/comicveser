@@ -57,6 +57,14 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum BookmarkStatus {
+  READING
+  COMPLETED
+  PLAN_TO_READ
+  ON_HOLD
+  DROPPED
+}
+
 enum NotificationType {
   NEW_CHAPTER
   BOOKMARK_UPDATE
@@ -111,6 +119,7 @@ model User {
   creator              Creator?
   bookmarks            Bookmark[]
   history              ReadingHistory[]
+  chapterReads         ChapterRead[]
   ratings              Rating[]
   reviews              Review[]
   comments             Comment[]
@@ -158,6 +167,7 @@ model Comic {
   genres           ComicGenre[]
   bookmarks        Bookmark[]
   history          ReadingHistory[]
+  chapterReads     ChapterRead[]
   ratings          Rating[]
   reviews          Review[]
   comments         Comment[]
@@ -185,6 +195,7 @@ model Chapter {
   images        ChapterImage[]
   sourceChapter SourceChapter?
   history       ReadingHistory[]
+  reads         ChapterRead[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?
@@ -225,14 +236,34 @@ model ComicGenre {
 }
 
 model Bookmark {
+  id        String          @id @default(cuid())
+  userId    String
+  comicId   String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic     Comic           @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  /// Manual shelf chosen by the reader. NULL means "automatic": derived from reading progress (see user/bookmark-status.ts).
+  status    BookmarkStatus?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+
+  @@unique([userId, comicId])
+  @@index([userId, status])
+}
+
+/// One row per chapter a reader has finished. Drives the persistent read/unread colours and bookmark progress.
+model ChapterRead {
   id        String   @id @default(cuid())
   userId    String
   comicId   String
+  chapterId String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   comic     Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  readAt    DateTime @default(now())
 
-  @@unique([userId, comicId])
+  @@unique([userId, chapterId])
+  @@index([userId, comicId])
+  @@index([userId, readAt])
 }
 
 model ReadingHistory {

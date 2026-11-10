@@ -1,17 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import * as argon2 from "argon2";
 import { PrismaService } from "../prisma/prisma.service";
+import { StorageService } from "../storage/storage.service";
 import { BookmarkQuery, ChangePasswordDto, ProgressDto, UpdateProfileDto } from "./dto/user.dto";
-
-const comicBrief = {
-  select: { id: true, slug: true, title: true, type: true, chapters: {
-    where: { publishState: "PUBLISHED" as const, deletedAt: null }, orderBy: { number: "desc" as const }, take: 1,
-    select: { id: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } } } },
-};
+import { BOOKMARK_STATUSES, BookmarkStatusValue, effectiveStatus, normalizeSort, progressPercent, sortBookmarks } from "./bookmark-status";
 
 @Injectable()
 export class UserService {
-  constructor(private db: PrismaService) {}
+  constructor(private db: PrismaService, private storage: StorageService) {}
 
   private get visibleComic() {
     return {
@@ -44,18 +40,122 @@ export class UserService {
     ]);
   }
 
-  async bookmarks(userId: string, q: BookmarkQuery) {
-    const where = { userId, comic: { ...this.visibleComic, ...(q.q && { title: { contains: q.q, mode: "insensitive" as const } }) } };
-    const take = 24;
-    const [total, items] = await this.db.$transaction([
-      this.db.bookmark.count({ where }),
-      this.db.bookmark.findMany({ where, include: { comic: comicBrief }, take, skip: (q.page - 1) * take,
-        orderBy: q.sort === "title" ? { comic: { title: "asc" } } : { createdAt: "desc" } }),
+  /** Chapters a reader may open: published, not deleted, and (for imported titles) from an approved source. */
+  private get visibleChapter() {
+    return { publishState: "PUBLISHED" as const, deletedAt: null, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" as const } } } }] };
+  }
+
+  private async coverUrl(c: { externalCoverUrl: string | null; coverKey: string | null }) {
+    return c.externalCoverUrl ?? (c.coverKey ? await this.storage.readUrl(c.coverKey) : null);
+  }
+
+  /** Every visible bookmark with its effective status and reading progress (a library is small, so this is done in one pass). */
+  private async library(userId: string, search?: string) {
+    const rows = await this.db.bookmark.findMany({
+      where: { userId, comic: { AND: [this.visibleComic, ...(search ? [{ OR: [{ title: { contains: search, mode: "insensitive" as const } }, { altTitle: { contains: search, mode: "insensitive" as const } }] }] : [])] } },
+      take: 1000,
+      include: { comic: { select: { id: true, slug: true, title: true, type: true, status: true, coverKey: true, externalCoverUrl: true, chapters: {
+        where: { publishState: "PUBLISHED" as const, deletedAt: null }, orderBy: { number: "desc" as const }, take: 1,
+        select: { id: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } } } } } },
+    });
+    const comicIds = rows.map((r) => r.comicId);
+    const [totals, reads, history] = await Promise.all([
+      this.db.chapter.groupBy({ by: ["comicId"], where: { comicId: { in: comicIds }, ...this.visibleChapter }, _count: { _all: true } }),
+      this.db.chapterRead.groupBy({ by: ["comicId"], where: { userId, comicId: { in: comicIds }, chapter: this.visibleChapter }, _count: { _all: true }, _max: { readAt: true } }),
+      this.db.readingHistory.findMany({ where: { userId, comicId: { in: comicIds } }, include: { chapter: { select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } } } }),
     ]);
-    return { total, page: q.page, items: items.map((b) => {
-      const { sourceChapter, ...latest } = b.comic.chapters[0] ?? {};
-      return { bookmarkedAt: b.createdAt, comic: { ...b.comic, latestChapter: b.comic.chapters[0] ? { ...latest, displayNumber: sourceChapter ? sourceChapter.numberLabel ?? "Special" : String(latest.number) } : null, chapters: undefined } };
-    }) };
+    const totalBy = new Map(totals.map((t) => [t.comicId, t._count._all]));
+    const readBy = new Map(reads.map((r) => [r.comicId, { count: r._count._all, last: r._max.readAt }]));
+    const histBy = new Map(history.map((h) => [h.comicId, h]));
+
+    return Promise.all(rows.map(async (b) => {
+      const total = totalBy.get(b.comicId) ?? 0;
+      const read = readBy.get(b.comicId);
+      const hist = histBy.get(b.comicId);
+      const manual = (b.status as BookmarkStatusValue | null) ?? null;
+      const status = effectiveStatus({ manual, readCount: read?.count ?? 0, hasHistory: !!hist, totalChapters: total, comicCompleted: b.comic.status === "COMPLETED" });
+      const latest = b.comic.chapters[0];
+      const latestLabel = latest ? (latest.sourceChapter ? latest.sourceChapter.numberLabel ?? "Special" : String(latest.number)) : null;
+      const lastUpdatedAt = latest?.publishedAt ?? b.updatedAt;
+      const lastReadAt = hist?.updatedAt ?? read?.last ?? null;
+      return {
+        title: b.comic.title, bookmarkedAt: b.createdAt, lastUpdatedAt,
+        view: {
+          bookmarkedAt: b.createdAt, lastUpdatedAt, status, statusSource: manual ? ("manual" as const) : ("auto" as const),
+          comic: {
+            id: b.comic.id, slug: b.comic.slug, title: b.comic.title, type: b.comic.type, status: b.comic.status,
+            coverUrl: await this.coverUrl(b.comic), totalChapters: total,
+            latestChapter: latest ? { id: latest.id, number: latest.number, publishedAt: latest.publishedAt, displayNumber: latestLabel } : null,
+          },
+          progress: {
+            readCount: read?.count ?? 0, percent: progressPercent(read?.count ?? 0, total), lastReadAt,
+            current: hist ? { chapterId: hist.chapter.id, number: hist.chapter.number, displayNumber: hist.chapter.sourceChapter ? hist.chapter.sourceChapter.numberLabel ?? "Special" : String(hist.chapter.number), imageIndex: hist.imageIndex } : null,
+          },
+        },
+      };
+    }));
+  }
+
+  async bookmarks(userId: string, q: BookmarkQuery) {
+    const all = await this.library(userId, q.q?.trim() || undefined);
+    const counts: Record<string, number> = { ALL: all.length };
+    for (const s of BOOKMARK_STATUSES) counts[s] = 0;
+    all.forEach((r) => { counts[r.view.status] += 1; });
+    const wanted = q.status && q.status !== "ALL" ? q.status : null;
+    const filtered = sortBookmarks(all.filter((r) => !wanted || r.view.status === wanted), normalizeSort(q.sort));
+    const size = q.limit ?? 24;
+    const items = filtered.slice((q.page - 1) * size, q.page * size).map((r) => r.view);
+    return { total: filtered.length, page: q.page, pageSize: size, counts, items };
+  }
+
+  /** Sets a manual shelf, or AUTO to hand control back to reading progress. */
+  async setBookmarkStatus(userId: string, comicId: string, status: string) {
+    const value = status === "AUTO" ? null : (status as BookmarkStatusValue);
+    const r = await this.db.bookmark.updateMany({ where: { userId, comicId }, data: { status: value } });
+    if (r.count === 0) throw new NotFoundException("Bookmark not found.");
+  }
+
+  /** A reader who starts a comic on their Plan to Read shelf is now reading it. */
+  private async startedReading(userId: string, comicId: string) {
+    await this.db.bookmark.updateMany({ where: { userId, comicId, status: "PLAN_TO_READ" }, data: { status: null } });
+  }
+
+  async markChapterRead(userId: string, chapterId: string) {
+    const ch = await this.db.chapter.findFirst({ where: { id: chapterId, ...this.visibleChapter, comic: this.visibleComic }, select: { id: true, comicId: true } });
+    if (!ch) throw new NotFoundException("Chapter not found.");
+    await this.db.chapterRead.upsert({
+      where: { userId_chapterId: { userId, chapterId } },
+      update: { readAt: new Date() },
+      create: { userId, comicId: ch.comicId, chapterId },
+    });
+    await this.startedReading(userId, ch.comicId);
+  }
+
+  async readChapterIds(userId: string, comicId: string) {
+    const rows = await this.db.chapterRead.findMany({ where: { userId, comicId, chapter: this.visibleChapter }, select: { chapterId: true } });
+    return { chapterIds: rows.map((r) => r.chapterId) };
+  }
+
+  /** Most recently finished chapters, for the account page. */
+  async readChapters(userId: string) {
+    const rows = await this.db.chapterRead.findMany({
+      where: { userId, chapter: this.visibleChapter, comic: this.visibleComic }, orderBy: { readAt: "desc" }, take: 30,
+      include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } } },
+    });
+    return rows.map((r) => ({ comic: r.comic, readAt: r.readAt,
+      chapter: { id: r.chapter.id, number: r.chapter.number, displayNumber: r.chapter.sourceChapter ? r.chapter.sourceChapter.numberLabel ?? "Special" : String(r.chapter.number) } }));
+  }
+
+  async stats(userId: string) {
+    const [lib, chaptersRead, comicsStarted] = await Promise.all([
+      this.library(userId),
+      this.db.chapterRead.count({ where: { userId, chapter: this.visibleChapter, comic: this.visibleComic } }),
+      this.db.readingHistory.count({ where: { userId, comic: this.visibleComic } }),
+    ]);
+    const shelves: Record<string, number> = {};
+    for (const s of BOOKMARK_STATUSES) shelves[s] = 0;
+    lib.forEach((r) => { shelves[r.view.status] += 1; });
+    return { bookmarks: lib.length, chaptersRead, comicsStarted, shelves };
   }
 
   async isBookmarked(userId: string, comicId: string) {
@@ -69,10 +169,11 @@ export class UserService {
   async removeBookmark(userId: string, comicId: string) { await this.db.bookmark.deleteMany({ where: { userId, comicId } }); }
 
   async saveProgress(userId: string, d: ProgressDto) {
-    const ch = await this.db.chapter.findFirst({ where: { id: d.chapterId, comicId: d.comicId, publishState: "PUBLISHED", deletedAt: null, comic: this.visibleComic, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] }, select: { id: true } });
+    const ch = await this.db.chapter.findFirst({ where: { id: d.chapterId, comicId: d.comicId, comic: this.visibleComic, ...this.visibleChapter }, select: { id: true } });
     if (!ch) throw new BadRequestException("That chapter does not belong to this comic.");
     const data = { chapterId: d.chapterId, imageIndex: d.imageIndex, scrollY: d.scrollY };
     await this.db.readingHistory.upsert({ where: { userId_comicId: { userId, comicId: d.comicId } }, update: data, create: { userId, comicId: d.comicId, ...data } });
+    await this.startedReading(userId, d.comicId);
   }
 
   async history(userId: string) {
@@ -98,7 +199,7 @@ export class UserService {
     if (!(await argon2.verify(u.passwordHash, password).catch(() => false))) throw new UnauthorizedException("Password is incorrect.");
     await this.db.$transaction([
       this.db.session.deleteMany({ where: { userId } }), this.db.authToken.deleteMany({ where: { userId } }),
-      this.db.bookmark.deleteMany({ where: { userId } }), this.db.readingHistory.deleteMany({ where: { userId } }),
+      this.db.bookmark.deleteMany({ where: { userId } }), this.db.readingHistory.deleteMany({ where: { userId } }), this.db.chapterRead.deleteMany({ where: { userId } }),
       this.db.notification.deleteMany({ where: { userId } }), this.db.reviewVote.deleteMany({ where: { userId } }),
       this.db.userProfile.deleteMany({ where: { userId } }),
       this.db.externalLibraryEntry.deleteMany({ where: { userId } }),

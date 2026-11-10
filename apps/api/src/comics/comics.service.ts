@@ -46,7 +46,7 @@ export class ComicsService {
   private mediaUrl(key?: string | null) { return key ? this.storage.readUrl(key) : Promise.resolve(null); }
 
   private invalidateHomeCaches() {
-    return Promise.all(["comics:trending", "comics:popular", "comics:latest"].map((key) => this.cache.delete(key)));
+    return Promise.all(["comics:trending", "comics:popular", "comics:popular:weekly", "comics:popular:monthly", "comics:latest"].map((key) => this.cache.delete(key)));
   }
 
   // Average comes from Rating rows only; it is never stored on the comic.
@@ -60,10 +60,14 @@ export class ComicsService {
       select: { id: true, comicId: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } },
     });
     const lm = new Map(latest.map((c) => [c.comicId, c]));
+    const counts = await this.db.chapter.groupBy({
+      by: ["comicId"], where: { comicId: { in: items.map((i) => i.id) }, publishState: "PUBLISHED", deletedAt: null }, _count: true,
+    });
+    const cm = new Map(counts.map((r) => [r.comicId, r._count]));
     return Promise.all(items.map(async (i) => {
       const latestChapter = lm.get(i.id);
       return {
-        ...i, rating: m.get(i.id)?._avg.value ?? null, ratingCount: m.get(i.id)?._count ?? 0,
+        ...i, rating: m.get(i.id)?._avg.value ?? null, ratingCount: m.get(i.id)?._count ?? 0, chapterCount: cm.get(i.id) ?? 0,
         latestChapter: latestChapter ? { id: latestChapter.id, number: latestChapter.number, displayNumber: latestChapter.sourceChapter ? latestChapter.sourceChapter.numberLabel ?? "Special" : String(latestChapter.number), publishedAt: latestChapter.publishedAt } : null,
         coverUrl: (i as { externalCoverUrl?: string | null }).externalCoverUrl ?? await this.mediaUrl((i as { coverKey?: string | null }).coverKey),
         bannerUrl: await this.mediaUrl((i as { bannerKey?: string | null }).bannerKey),
@@ -72,6 +76,13 @@ export class ComicsService {
   }
 
   async list(q: ListComicsQuery) {
+    const genreSlugs = (q.genre ?? "").split(",").map((g) => g.trim()).filter(Boolean).slice(0, 6);
+    const creator = q.creator?.trim();
+    // Every selected genre must match (AND), so adding a genre narrows the results.
+    const and: Prisma.ComicWhereInput[] = [
+      ...genreSlugs.map((slug) => ({ genres: { some: { genre: { slug } } } })),
+      ...(creator ? [{ OR: [{ author: { contains: creator, mode: "insensitive" as const } }, { artist: { contains: creator, mode: "insensitive" as const } }] }] : []),
+    ];
     const where: Prisma.ComicWhereInput = {
       ...this.publicWhere,
       ...(q.q && {
@@ -82,20 +93,34 @@ export class ComicsService {
           { artist: { contains: q.q, mode: "insensitive" } },
         ],
       }),
-      ...(q.genre && { genres: { some: { genre: { slug: q.genre } } } }),
+      ...(and.length ? { AND: and } : {}),
       ...(q.type && { type: q.type }), ...(q.status && { status: q.status }), ...(q.year && { releaseYear: q.year }),
     };
-    const orderBy: Prisma.ComicOrderByWithRelationInput[] = [
-      ({ updated: { updatedAt: "desc" }, added: { createdAt: "desc" }, popular: { views: "desc" }, alpha: { title: "asc" } }[q.sort ?? "updated"] as Prisma.ComicOrderByWithRelationInput),
-      { createdAt: "desc" },
-    ];
+    const baseOrder = ({ updated: { updatedAt: "desc" }, added: { createdAt: "desc" }, popular: { views: "desc" }, alpha: { title: "asc" } } as Record<string, Prisma.ComicOrderByWithRelationInput>)[q.sort ?? "updated"] ?? { updatedAt: "desc" };
+    const orderBy: Prisma.ComicOrderByWithRelationInput[] = [baseOrder, { createdAt: "desc" }];
+
+    // Rating, chapter count and minimum filters are derived values (not columns), so those queries are filtered,
+    // sorted and paginated in memory over the matching catalogue (capped) instead of in SQL.
+    if (q.sort === "rating" || q.sort === "chapters" || q.minChapters || q.minRating) {
+      const rows = await this.db.comic.findMany({ where, orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }], include, take: 1000 });
+      let all = await this.withRatings(dedupeByTitle(rows));
+      if (q.minRating) all = all.filter((i) => (i.rating ?? 0) >= q.minRating!);
+      if (q.minChapters) all = all.filter((i) => i.chapterCount >= q.minChapters!);
+      if (q.sort === "rating") all.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || b.ratingCount - a.ratingCount);
+      else if (q.sort === "chapters") all.sort((a, b) => b.chapterCount - a.chapterCount);
+      else if (q.sort === "popular") all.sort((a, b) => b.views - a.views);
+      else if (q.sort === "added") all.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      else if (q.sort === "alpha") all.sort((a, b) => a.title.localeCompare(b.title));
+      const start = (q.page - 1) * q.pageSize;
+      return { items: all.slice(start, start + q.pageSize), total: all.length, page: q.page, pageSize: q.pageSize, pages: Math.max(1, Math.ceil(all.length / q.pageSize)) };
+    }
+
     const [total, rows] = await this.db.$transaction([
       this.db.comic.count({ where }),
       this.db.comic.findMany({ where, orderBy, include, skip: (q.page - 1) * q.pageSize, take: q.pageSize }),
     ]);
     const uniqueRows = dedupeByTitle(rows);
-    let items = await this.withRatings(uniqueRows);
-    if (q.minRating) items = items.filter((i) => (i.rating ?? 0) >= q.minRating!);
+    const items = await this.withRatings(uniqueRows);
     const adjustedTotal = Math.max(items.length, total - (rows.length - uniqueRows.length));
     return { items, total: adjustedTotal, page: q.page, pageSize: q.pageSize, pages: Math.max(1, Math.ceil(adjustedTotal / q.pageSize)) };
   }
@@ -110,7 +135,29 @@ export class ComicsService {
     return this.withRatings(dedupeByTitle(rows).slice(0, take));
   }
   trending() { return this.cache.wrap("comics:trending", 60, () => this.top({ views: "desc" })); }
-  popular() { return this.cache.wrap("comics:popular", 60, () => this.top({ views: "desc" })); }
+  popular(period: "weekly" | "monthly" | "all" = "all") {
+    if (period === "all") return this.cache.wrap("comics:popular", 60, () => this.top({ views: "desc" }));
+    return this.cache.wrap(`comics:popular:${period}`, 60, () => this.popularSince(period === "weekly" ? 7 : 30));
+  }
+
+  // Real period rankings from recorded COMIC_VIEW events; padded with all-time leaders so the list is never empty.
+  private async popularSince(days: number, take = 12) {
+    const since = new Date(Date.now() - days * 86_400_000);
+    const groups = await this.db.analyticsEvent.groupBy({
+      by: ["comicId"], where: { type: "COMIC_VIEW", comicId: { not: null }, createdAt: { gte: since } },
+      _count: { _all: true }, orderBy: { _count: { comicId: "desc" } }, take: take * 2,
+    });
+    const ids = groups.map((g) => g.comicId).filter((id): id is string => !!id);
+    const rows = ids.length ? await this.db.comic.findMany({ where: { ...this.publicWhere, id: { in: ids } }, include }) : [];
+    const order = new Map(ids.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    const ranked = dedupeByTitle(rows);
+    if (ranked.length < take) {
+      const fill = await this.db.comic.findMany({ where: this.publicWhere, orderBy: [{ views: "desc" }, { createdAt: "desc" }], include, take: take * 2 });
+      ranked.push(...fill.filter((f) => !ranked.some((r) => r.id === f.id)));
+    }
+    return this.withRatings(dedupeByTitle(ranked).slice(0, take));
+  }
   latest() { return this.cache.wrap("comics:latest", 60, () => this.top({ updatedAt: "desc" })); }
 
   async bySlug(slug: string) {

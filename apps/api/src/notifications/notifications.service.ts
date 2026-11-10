@@ -1,23 +1,33 @@
 import { Body, Controller, Get, Global, HttpCode, Injectable, Logger, Module, Post, Put, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from "class-validator";
 import { PrismaService } from "../prisma/prisma.service";
 import { Authenticated, AuthUser, CurrentUser } from "../auth/auth.guard";
 
 class ReadDto { @IsOptional() @IsArray() @ArrayMaxSize(100) @IsString({ each: true }) ids?: string[]; }
 class SettingsDto { @IsBoolean() newChapter: boolean; }
-class PageQuery { @IsOptional() @Type(() => Number) @IsInt() @Min(1) page: number = 1; }
+class PageQuery {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page: number = 1;
+  /** messages = notes from the platform, creators and review replies; alerts = new chapters and bookmark updates. Omitted = everything. */
+  @IsOptional() @IsIn(["messages", "alerts"]) group?: "messages" | "alerts";
+}
+const GROUPS = {
+  messages: ["PLATFORM", "ACCOUNT", "CREATOR_ANNOUNCEMENT", "REVIEW_REPLY"] as const,
+  alerts: ["NEW_CHAPTER", "BOOKMARK_UPDATE"] as const,
+};
 
 @Injectable()
 export class NotificationsService {
   private log = new Logger("Notifications");
   constructor(private db: PrismaService) {}
 
-  async list(userId: string, page: number) {
+  async list(userId: string, page: number, group?: "messages" | "alerts") {
+    const typeFilter = group ? { type: { in: [...GROUPS[group]] } } : {};
     const [unread, items, profile] = await Promise.all([
+      // `unread` stays the total across groups: it drives the bell badge, while the lists are filtered per page.
       this.db.notification.count({ where: { userId, readAt: null } }),
-      this.db.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, skip: (page - 1) * 20, take: 20 }),
+      this.db.notification.findMany({ where: { userId, ...typeFilter }, orderBy: { createdAt: "desc" }, skip: (page - 1) * 20, take: 20 }),
       this.db.userProfile.findUnique({ where: { userId }, select: { notifyPrefs: true } }),
     ]);
     return { unread, items, prefs: { newChapter: (profile?.notifyPrefs as any)?.newChapter !== false } };
@@ -52,7 +62,7 @@ export class NotificationsService {
 @Controller("user")
 export class NotificationsController {
   constructor(private svc: NotificationsService) {}
-  @Get("notifications") list(@CurrentUser() u: AuthUser, @Query() q: PageQuery) { return this.svc.list(u.id, q.page); }
+  @Get("notifications") list(@CurrentUser() u: AuthUser, @Query() q: PageQuery) { return this.svc.list(u.id, q.page, q.group); }
   @HttpCode(204) @Post("notifications/read") read(@CurrentUser() u: AuthUser, @Body() d: ReadDto) { return this.svc.markRead(u.id, d.ids); }
   @HttpCode(204) @Put("notification-settings") settings(@CurrentUser() u: AuthUser, @Body() d: SettingsDto) { return this.svc.setPrefs(u.id, d.newChapter); }
 }

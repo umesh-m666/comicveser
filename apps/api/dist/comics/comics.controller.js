@@ -42,7 +42,7 @@ let ComicsController = class ComicsController {
     list(q) { return this.svc.list(q); }
     trending() { return this.svc.trending(); }
     latest() { return this.svc.latest(); }
-    popular() { return this.svc.popular(); }
+    popular(period) { return this.svc.popular(period === "weekly" || period === "monthly" ? period : "all"); }
     chapters(id, order) {
         return this.svc.chapters(id, order === "asc" ? "asc" : "desc");
     }
@@ -75,8 +75,9 @@ __decorate([
 ], ComicsController.prototype, "latest", null);
 __decorate([
     (0, common_1.Get)("comics/popular"),
+    __param(0, (0, common_1.Query)("period")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "popular", null);
 __decorate([

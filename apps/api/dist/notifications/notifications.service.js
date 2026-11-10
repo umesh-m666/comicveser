@@ -38,6 +38,8 @@ __decorate([
 ], SettingsDto.prototype, "newChapter", void 0);
 class PageQuery {
     page = 1;
+    /** messages = notes from the platform, creators and review replies; alerts = new chapters and bookmark updates. Omitted = everything. */
+    group;
 }
 __decorate([
     (0, class_validator_1.IsOptional)(),
@@ -46,16 +48,27 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], PageQuery.prototype, "page", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(["messages", "alerts"]),
+    __metadata("design:type", String)
+], PageQuery.prototype, "group", void 0);
+const GROUPS = {
+    messages: ["PLATFORM", "ACCOUNT", "CREATOR_ANNOUNCEMENT", "REVIEW_REPLY"],
+    alerts: ["NEW_CHAPTER", "BOOKMARK_UPDATE"],
+};
 let NotificationsService = class NotificationsService {
     db;
     log = new common_1.Logger("Notifications");
     constructor(db) {
         this.db = db;
     }
-    async list(userId, page) {
+    async list(userId, page, group) {
+        const typeFilter = group ? { type: { in: [...GROUPS[group]] } } : {};
         const [unread, items, profile] = await Promise.all([
+            // `unread` stays the total across groups: it drives the bell badge, while the lists are filtered per page.
             this.db.notification.count({ where: { userId, readAt: null } }),
-            this.db.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, skip: (page - 1) * 20, take: 20 }),
+            this.db.notification.findMany({ where: { userId, ...typeFilter }, orderBy: { createdAt: "desc" }, skip: (page - 1) * 20, take: 20 }),
             this.db.userProfile.findUnique({ where: { userId }, select: { notifyPrefs: true } }),
         ]);
         return { unread, items, prefs: { newChapter: profile?.notifyPrefs?.newChapter !== false } };
@@ -96,7 +109,7 @@ let NotificationsController = class NotificationsController {
     constructor(svc) {
         this.svc = svc;
     }
-    list(u, q) { return this.svc.list(u.id, q.page); }
+    list(u, q) { return this.svc.list(u.id, q.page, q.group); }
     read(u, d) { return this.svc.markRead(u.id, d.ids); }
     settings(u, d) { return this.svc.setPrefs(u.id, d.newChapter); }
 };

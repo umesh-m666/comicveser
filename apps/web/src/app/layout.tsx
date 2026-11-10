@@ -1,24 +1,26 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Analytics from "@/components/Analytics";
 import { Header, Footer } from "@/components/Nav";
 import BottomNav from "@/components/BottomNav";
+import ChromeGate from "@/components/ChromeGate";
 import AuthProvider from "@/components/AuthProvider";
+import LibraryProvider from "@/components/LibraryProvider";
 
 export const metadata: Metadata = {
   title: { default: "ComicVerse - Read manga, manhwa, manhua and webtoons", template: "%s | ComicVerse" },
   description: "Discover and read original and licensed comics and novels.",
 };
+export const viewport: Viewport = { themeColor: "#100e16", viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="font-sans antialiased">
         <AuthProvider>
-          <Header />
-          <main className="mx-auto max-w-7xl px-4 py-8 md:py-10">{children}</main>
-          <Footer />
-          <BottomNav />
+          <LibraryProvider>
+            <ChromeGate header={<Header />} footer={<Footer />} bottomNav={<BottomNav />}>{children}</ChromeGate>
+          </LibraryProvider>
         </AuthProvider>
         <Analytics />
       </body>

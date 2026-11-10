@@ -3,7 +3,7 @@ import { ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Authenticated, AuthUser, CurrentUser } from "../auth/auth.guard";
 import { UserService } from "./user.service";
-import { BookmarkDto, BookmarkQuery, ChangePasswordDto, DeleteAccountDto, ProgressDto, UpdateProfileDto } from "./dto/user.dto";
+import { BookmarkDto, BookmarkQuery, BookmarkStatusDto, ChangePasswordDto, DeleteAccountDto, ProgressDto, UpdateProfileDto } from "./dto/user.dto";
 
 @ApiTags("user")
 @Authenticated()
@@ -17,8 +17,14 @@ export class UserController {
   @Get("bookmarks/:comicId") isBookmarked(@CurrentUser() u: AuthUser, @Param("comicId") id: string) { return this.svc.isBookmarked(u.id, id); }
   @HttpCode(204) @Post("bookmarks") add(@CurrentUser() u: AuthUser, @Body() d: BookmarkDto) { return this.svc.addBookmark(u.id, d.comicId); }
   @HttpCode(204) @Delete("bookmarks/:comicId") remove(@CurrentUser() u: AuthUser, @Param("comicId") id: string) { return this.svc.removeBookmark(u.id, id); }
+  @HttpCode(204) @Put("bookmarks/:comicId/status") setStatus(@CurrentUser() u: AuthUser, @Param("comicId") id: string, @Body() d: BookmarkStatusDto) { return this.svc.setBookmarkStatus(u.id, id, d.status); }
   @HttpCode(204) @Post("progress") progress(@CurrentUser() u: AuthUser, @Body() d: ProgressDto) { return this.svc.saveProgress(u.id, d); }
   @Get("reviews") reviews(@CurrentUser() u: AuthUser) { return this.svc.reviews(u.id); }
   @Throttle({ default: { limit: 5, ttl: 60_000 } }) @HttpCode(204) @Delete("account") deleteAccount(@CurrentUser() u: AuthUser, @Body() d: DeleteAccountDto) { return this.svc.deleteAccount(u.id, d.password); }
+  /** Marks a chapter as finished (persists the purple "read" state). The reader calls this once the chapter is completed. */
+  @HttpCode(204) @Post("chapters/:chapterId/read") markRead(@CurrentUser() u: AuthUser, @Param("chapterId") id: string) { return this.svc.markChapterRead(u.id, id); }
+  @Get("comics/:comicId/read-chapters") readChapterIds(@CurrentUser() u: AuthUser, @Param("comicId") id: string) { return this.svc.readChapterIds(u.id, id); }
+  @Get("read-chapters") readChapters(@CurrentUser() u: AuthUser) { return this.svc.readChapters(u.id); }
+  @Get("stats") stats(@CurrentUser() u: AuthUser) { return this.svc.stats(u.id); }
   @Get("history") history(@CurrentUser() u: AuthUser) { return this.svc.history(u.id); }
 }

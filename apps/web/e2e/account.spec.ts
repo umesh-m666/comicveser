@@ -4,6 +4,8 @@ import { ADMIN, login } from "./fixtures";
 // Needs the API on :4000 against the TEST database seeded with seed-e2e.ts (see README). Not run in the sandbox this was written in.
 const stamp = Date.now(), user = { username: `acct${stamp}`, email: `acct-${stamp}@example.com`, password: "e2e-account-password-1" };
 const mobile = { width: 390, height: 800 };
+/** The profile popup holds Admin Panel (admins only), Profile, Messages, Alerts, Settings and Log out. */
+const openMenu = (page: import("@playwright/test").Page) => page.getByRole("button", { name: "Account menu" }).click();
 
 test.describe.serial("account, auth persistence and admin access", () => {
   test("logged-out /account offers Log in and Create account; protected pages redirect to login", async ({ page }) => {
@@ -14,7 +16,7 @@ test.describe.serial("account, auth persistence and admin access", () => {
     await expect(page).toHaveURL(/\/login\?next=%2Fprofile%2Fbookmarks/);
   });
 
-  test("register, then mobile: login → Account tab opens dashboard, survives refresh and navigation, logout clears it", async ({ page }) => {
+  test("register, then mobile: login → profile menu opens the dashboard, survives refresh and navigation, logout clears it", async ({ page }) => {
     await page.goto("/register");
     await page.getByLabel("Username").fill(user.username);
     await page.getByLabel("Email").fill(user.email);
@@ -25,7 +27,8 @@ test.describe.serial("account, auth persistence and admin access", () => {
 
     await page.setViewportSize(mobile);
     await login(page, user.email, user.password);
-    await page.getByRole("navigation", { name: "Mobile" }).getByRole("link", { name: "Account" }).click();
+    await openMenu(page);
+    await page.getByRole("menuitem", { name: "Profile" }).click();
     await expect(page).toHaveURL(/\/account$/);
     await expect(page.getByRole("heading", { name: user.username })).toBeVisible();
     await expect(page.getByText(user.email)).toBeVisible();
@@ -33,14 +36,17 @@ test.describe.serial("account, auth persistence and admin access", () => {
 
     await page.reload();
     await expect(page.getByRole("heading", { name: user.username })).toBeVisible();
-    await page.getByRole("navigation", { name: "Mobile" }).getByRole("link", { name: "Discover" }).click();
-    await page.getByRole("navigation", { name: "Mobile" }).getByRole("link", { name: "Account" }).click();
+    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Browse" }).click();
+    await expect(page).toHaveURL(/\/browse/);
+    await openMenu(page);
+    await page.getByRole("menuitem", { name: "Profile" }).click();
     await expect(page.getByRole("heading", { name: user.username })).toBeVisible();
 
     await page.setViewportSize({ width: 1280, height: 800 }); // resize mobile → desktop keeps working
     await expect(page.getByRole("heading", { name: user.username })).toBeVisible();
 
-    await page.getByRole("button", { name: "Log out" }).first().click();
+    await openMenu(page);
+    await page.getByRole("menuitem", { name: "Log out" }).click();
     await page.goto("/account");
     await expect(page.getByRole("link", { name: "Create account" })).toBeVisible();
     await page.goto("/login");
@@ -53,7 +59,9 @@ test.describe.serial("account, auth persistence and admin access", () => {
     await expect(page).toHaveURL(/\/$/);
     await page.goto("/admin");
     await expect(page.getByText("Admin access required")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Admin Panel" })).toHaveCount(0);
+    await openMenu(page);
+    await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Admin Panel" })).toHaveCount(0); // the entry is not even rendered for normal users
   });
 
   test("an expired/revoked session is handled: the user is sent to login with a notice", async ({ page, context }) => {
@@ -65,10 +73,12 @@ test.describe.serial("account, auth persistence and admin access", () => {
     await expect(page.getByRole("link", { name: "Create account" })).toBeVisible();
   });
 
-  test("an admin sees the Admin Panel from the account page and can open it", async ({ page }) => {
+  test("an admin opens the Admin Panel from the account menu", async ({ page }) => {
     await login(page, ADMIN.email, ADMIN.password);
     await page.goto("/account");
-    await page.getByRole("link", { name: /Admin Panel/ }).first().click();
+    await expect(page.getByRole("link", { name: "Admin Panel" })).toHaveCount(0); // not in the main navigation or on the account page
+    await openMenu(page);
+    await page.getByRole("menuitem", { name: "Admin Panel" }).click();
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   });

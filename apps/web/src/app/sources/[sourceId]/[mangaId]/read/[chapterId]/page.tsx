@@ -320,45 +320,25 @@ export default async function ExternalRead({
     );
   }
 
+  // Immersive reader: only the artwork is visible by default. Source details live in the reader's settings panel.
   return (
-    <div className="space-y-3">
-      {/* External source information */}
-      <div className="mx-auto max-w-4xl rounded-lg border border-line bg-card px-4 py-3 text-xs text-muted">
-        <span className="font-semibold text-fg">
-          External chapter
-        </span>
-
-        {" "}from {sourceInfo.displayName} (ID: {chapterId})
-
-        {pages.groups.length > 0 && (
-          <> · Group: {pages.groups.join(", ")}</>
-        )}
-
-        {" "}·{" "}
-
-        <a
-          href={pages.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline"
-        >
-          Open on {sourceInfo.displayName}
-        </a>
-      </div>
-
-      {/* ComicVerse reader */}
-      <Reader
-        key={`${sourceId}:${mangaId}:${chapterId}`}
-        slug={mangaId}
-        meta={meta}
-        initial={initial}
-        chapters={chapterMenu}
-        external={{
-          basePath: `/sources/${sourceId}/${mangaId}`,
-          query: `?lang=${lang}`,
-        }}
-      />
-    </div>
+    <Reader
+      key={`${sourceId}:${mangaId}:${chapterId}`}
+      slug={mangaId}
+      meta={meta}
+      initial={initial}
+      chapters={chapterMenu}
+      external={{
+        basePath: `/sources/${sourceId}/${mangaId}`,
+        query: `?lang=${lang}`,
+      }}
+      source={{
+        name: sourceInfo.displayName,
+        url: pages.sourceUrl,
+        groups: pages.groups,
+        chapterId,
+      }}
+    />
   );
 }
 
