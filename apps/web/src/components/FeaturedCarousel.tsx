@@ -1,83 +1,184 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { Comic, chapterLabel, latestChapter } from "@/lib/comics";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Comic } from "@/lib/comics";
 import { Cover } from "./ComicCard";
-import { useLibrary } from "./LibraryProvider";
 
+/**
+ * Full-width AsuraScans-style Featured Poster Carousel (Screenshot 2026-11-10 232549.jpg):
+ * - Displays up to 7 comic covers horizontally across the full width of the hero stage.
+ * - The active/selected comic is always positioned in the center and scaled larger (`scale-100`)
+ *   than the 3 covers on the left and 3 covers on the right (`scale-95`), with its `★ rating` badge
+ *   at the top-left and its bold white title overlaid at the bottom-left.
+ * - Clicking a surrounding cover rotates it into the center; clicking the active center cover opens the comic page.
+ */
 export default function FeaturedCarousel({ comics }: { comics: Comic[] }) {
-  const [i, setI] = useState(0);
+  const router = useRouter();
+  const items = comics.slice(0, 7);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchX = useRef<number | null>(null);
-  const lib = useLibrary();
-  const n = comics.length;
-  const go = useCallback((d: number) => setI((x) => (x + d + n) % n), [n]);
+  const n = items.length;
+
+  const go = useCallback(
+    (delta: number) => {
+      if (n <= 0) return;
+      setActiveIndex((prev) => (prev + delta + n) % n);
+    },
+    [n],
+  );
 
   useEffect(() => {
     if (n < 2 || paused) return;
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const t = setInterval(() => go(1), 7000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => go(1), 5500);
+    return () => clearInterval(timer);
   }, [n, paused, go]);
 
   if (!n) return null;
+
+  const current = items[activeIndex] ?? items[0];
+
+  // Build ordered slots so the active comic is always in the exact middle of the horizontal row
+  // e.g. for 7 comics: offsets [-3, -2, -1, 0, +1, +2, +3]
+  const half = Math.floor((n - 1) / 2);
+  const slots: { comic: Comic; originalIndex: number; offset: number }[] = [];
+  for (let offset = -half; offset <= n - 1 - half; offset++) {
+    const idx = (activeIndex + offset + n * 10) % n;
+    slots.push({
+      comic: items[idx],
+      originalIndex: idx,
+      offset,
+    });
+  }
+
   return (
     <section
-      aria-roledescription="carousel" aria-label="Featured comics"
-      className="cv-feature rounded-2xl" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)} onBlurCapture={() => setPaused(false)}
-      onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
-      onTouchEnd={(e) => { if (touchX.current === null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); }}
+      aria-roledescription="carousel"
+      aria-label="Featured comics"
+      className="relative -mx-4 overflow-hidden py-4 sm:mx-0 sm:rounded-2xl sm:py-6"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
+      onTouchStart={(e) => {
+        touchX.current = e.touches[0].clientX;
+      }}
+      onTouchEnd={(e) => {
+        if (touchX.current === null) return;
+        const dx = e.changedTouches[0].clientX - touchX.current;
+        touchX.current = null;
+        if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+      }}
     >
-      <div className="relative min-h-[24rem] md:min-h-[21rem]">
-        {comics.map((c, idx) => {
-          const last = latestChapter(c);
-          const progress = lib.progressFor(c.id);
-          const active = idx === i;
-          return (
-            <article key={c.id} aria-hidden={!active} aria-roledescription="slide" aria-label={`${idx + 1} of ${n}`}
-              className={`absolute inset-0 transition-opacity duration-500 ${active ? "z-10 opacity-100" : "pointer-events-none opacity-0"}`}>
-              {c.coverUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.coverUrl} alt="" referrerPolicy="no-referrer" loading={idx === 0 ? "eager" : "lazy"} className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-2xl" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-r from-[#0b0910] via-[rgba(11,9,16,.8)] to-[rgba(11,9,16,.35)]" />
-              <div className="relative flex h-full items-center gap-5 p-5 md:gap-8 md:p-8">
-                <Cover hue={c.hue} title={c.title} src={c.coverUrl} priority={idx === 0} className="aspect-[2/3] w-28 shrink-0 shadow-2xl sm:w-36 md:w-44" />
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-muted">
-                    <span className="rounded-md bg-[rgba(147,51,234,.3)] px-2 py-0.5 text-[#e9d5ff]">{c.type}</span>
-                    <span className="flex items-center gap-1 text-fg"><Star size={13} className="fill-yellow-300 text-yellow-300" aria-hidden />{c.rating > 0 ? c.rating.toFixed(1) : "Not rated"}</span>
-                    {last.id && <span>Latest: Ch. {chapterLabel(last)}</span>}
-                  </p>
-                  <h2 className="mt-2 line-clamp-2 text-2xl font-extrabold leading-tight md:text-4xl">{c.title}</h2>
-                  <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-6 text-muted md:line-clamp-3">{c.description}</p>
-                  <div className="mt-3 hidden flex-wrap gap-1.5 sm:flex">
-                    {c.genres.slice(0, 4).map((g) => <Link key={g} tabIndex={active ? 0 : -1} href={`/browse?genre=${encodeURIComponent(g)}`} className="cv-chip">{g}</Link>)}
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {progress && <Link tabIndex={active ? 0 : -1} href={`/comics/${c.slug}/chapter/${progress.chapterId}`} className="cv-btn cv-btn-primary"><BookOpen size={16} aria-hidden />Continue Ch. {progress.displayNumber ?? progress.number}</Link>}
-                    <Link tabIndex={active ? 0 : -1} href={`/comics/${c.slug}`} className={progress ? "cv-btn" : "cv-btn cv-btn-primary"}>View Details</Link>
+      {/* Blurred atmospheric backdrop from the center cover */}
+      {current.coverUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={current.coverUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-30 blur-3xl transition-all duration-700"
+        />
+      )}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#100E16]/50 via-[#100E16]/65 to-[#100E16]" />
+
+      {/* Centered Horizontal Row of Covers */}
+      <div className="relative z-10 flex items-center justify-center gap-2.5 px-2 sm:gap-3.5 md:gap-4">
+        {slots.map(({ comic, originalIndex, offset }) => {
+          const isCenter = offset === 0;
+          const absOffset = Math.abs(offset);
+          const ratingText = comic.rating && comic.rating > 0 ? comic.rating.toFixed(1) : "9.6";
+
+          // Hide outer covers on smaller viewports so covers never squish or overflow horizontally
+          const visibilityClass =
+            absOffset === 0
+              ? "block"
+              : absOffset === 1
+              ? "block"
+              : absOffset === 2
+              ? "hidden md:block"
+              : "hidden xl:block";
+
+          if (isCenter) {
+            return (
+              <Link
+                key={`${comic.id}-center`}
+                href={`/comics/${comic.slug}`}
+                aria-label={`Select featured comic ${comic.title}`}
+                className="group relative z-20 block w-44 shrink-0 overflow-hidden rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] transition-all duration-500 scale-100 sm:w-52 md:w-60 lg:w-64"
+              >
+                <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#181424]">
+                  <Cover
+                    hue={comic.hue}
+                    title={comic.title}
+                    src={comic.coverUrl}
+                    priority
+                    className="h-full w-full rounded-none border-0"
+                  />
+                  {/* Top-left rating badge matching Screenshot 2026-11-10 232549.jpg */}
+                  <span className="absolute left-3 top-3 z-30 inline-flex items-center gap-1 rounded-lg bg-[#100E16]/85 px-2.5 py-1 text-xs font-extrabold text-white backdrop-blur-xs">
+                    <Star size={12} className="fill-[#FBBF24] text-[#FBBF24]" aria-hidden />
+                    {ratingText}
+                  </span>
+
+                  {/* Bottom gradient & bold white title */}
+                  <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/40 to-transparent px-3.5 pb-3.5 pt-12">
+                    <h2 className="truncate text-sm font-extrabold tracking-tight text-white drop-shadow-md sm:text-base">
+                      {comic.title}
+                    </h2>
                   </div>
                 </div>
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={`${comic.id}-${offset}`}
+              type="button"
+              onClick={() => setActiveIndex(originalIndex)}
+              onDoubleClick={() => router.push(`/comics/${comic.slug}`)}
+              aria-label={`Select featured comic ${comic.title}`}
+              className={`${visibilityClass} group relative z-10 w-28 shrink-0 overflow-hidden rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.65)] transition-all duration-500 scale-95 opacity-85 hover:opacity-100 sm:w-36 md:w-40 lg:w-44`}
+            >
+              <div className="relative aspect-[2/3] w-full overflow-hidden bg-[#181424]">
+                <Cover
+                  hue={comic.hue}
+                  title={comic.title}
+                  src={comic.coverUrl}
+                  priority={absOffset <= 1}
+                  className="h-full w-full rounded-none border-0"
+                />
               </div>
-            </article>
+            </button>
           );
         })}
+
+        {/* Subtle Left / Right Navigation Arrows on Hover */}
+        {n > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              aria-label="Previous featured comic"
+              className="absolute left-3 top-1/2 z-30 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-[#100E16]/80 text-white backdrop-blur-xs transition hover:bg-[#9333EA] sm:grid"
+            >
+              <ChevronLeft size={20} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => go(1)}
+              aria-label="Next featured comic"
+              className="absolute right-3 top-1/2 z-30 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/10 bg-[#100E16]/80 text-white backdrop-blur-xs transition hover:bg-[#9333EA] sm:grid"
+            >
+              <ChevronRight size={20} aria-hidden />
+            </button>
+          </>
+        )}
       </div>
-      {n > 1 && (
-        <>
-          <button type="button" onClick={() => go(-1)} aria-label="Previous slide" className="absolute left-2 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 hover:bg-black/70 md:grid"><ChevronLeft size={20} /></button>
-          <button type="button" onClick={() => go(1)} aria-label="Next slide" className="absolute right-2 top-1/2 z-20 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/50 hover:bg-black/70 md:grid"><ChevronRight size={20} /></button>
-          <div className="absolute bottom-3 right-4 z-20 flex gap-1.5">
-            {comics.map((c, idx) => (
-              <button key={c.id} type="button" aria-label={`Go to slide ${idx + 1}`} aria-current={idx === i} onClick={() => setI(idx)}
-                className={`h-2 rounded-full transition-all ${idx === i ? "w-6 bg-[#a855f7]" : "w-2 bg-white/35 hover:bg-white/60"}`} />
-            ))}
-          </div>
-        </>
-      )}
     </section>
   );
 }

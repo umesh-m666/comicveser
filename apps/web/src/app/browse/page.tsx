@@ -162,10 +162,10 @@ function BrowseContent() {
         <aside id="filter-panel" className={`${panelOpen ? "block" : "hidden"} cv-panel h-fit p-4 lg:sticky lg:top-20 lg:block`} aria-label="Filters">{panel}</aside>
         <section aria-live="polite">
           <p className="mb-4 text-sm text-muted">{loading ? "Searching comics..." : `${data.total} ${data.total === 1 ? "comic" : "comics"} found`}</p>
-          {loading && data.items.length === 0 ? <CardGridSkeleton count={12} className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-3 xl:grid-cols-4" /> :
+          {loading && data.items.length === 0 ? <CardGridSkeleton count={12} className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-5" /> :
             failed ? <EmptyState title="Couldn't load comics" body="Check your connection and try again." action={{ label: "Retry", onClick: () => setRetry((n) => n + 1) }} /> :
             data.items.length === 0 ? <EmptyState title="No comics match" body={query.q ? `Nothing found for “${query.q}”. Try another title or remove some filters.` : "Try removing a filter or searching a different title."} action={hasAny ? { label: "Reset filters", onClick: resetAll } : undefined} /> : (
-              <div className={`grid grid-cols-2 gap-x-4 gap-y-7 transition-opacity sm:grid-cols-3 xl:grid-cols-4 ${loading ? "opacity-50" : ""}`}>
+              <div className={`grid grid-cols-2 gap-3.5 transition-opacity sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-5 ${loading ? "opacity-50" : ""}`}>
                 {data.items.map((c) => <ComicCard key={c.slug} comic={c} />)}
               </div>
             )}

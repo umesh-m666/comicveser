@@ -25,38 +25,7 @@ let gotScrapingPromise: Promise<GotScrapingFn | null> | null = null;
 
 function loadGotScraping(): Promise<GotScrapingFn | null> {
   if (gotScrapingPromise) return gotScrapingPromise;
-  gotScrapingPromise = (async () => {
-    const dynamicImport = new Function("specifier", "return import(specifier)") as (
-      specifier: string
-    ) => Promise<{ gotScraping?: GotScrapingFn }>;
-
-    const candidates = [
-      path.resolve(__dirname, "../../vendor/node_modules/got-scraping/dist/index.js"),
-      path.resolve(__dirname, "../../../vendor/node_modules/got-scraping/dist/index.js"),
-      path.resolve(process.cwd(), "vendor/node_modules/got-scraping/dist/index.js"),
-      path.resolve(process.cwd(), "apps/api/vendor/node_modules/got-scraping/dist/index.js"),
-      path.resolve(process.cwd(), "../-manga-novel-api-main/node_modules/got-scraping/dist/index.js"),
-    ];
-
-    for (const candidate of candidates) {
-      try {
-        if (fs.existsSync(candidate)) {
-          const mod = await dynamicImport(pathToFileURL(candidate).href);
-          if (typeof mod?.gotScraping === "function") return mod.gotScraping;
-        }
-      } catch {
-        // try next candidate
-      }
-    }
-
-    try {
-      const mod = await dynamicImport("got-scraping");
-      if (typeof mod?.gotScraping === "function") return mod.gotScraping;
-    } catch {
-      // got-scraping not installed globally/locally
-    }
-    return null;
-  })();
+  gotScrapingPromise = Promise.resolve(null);
   return gotScrapingPromise;
 }
 

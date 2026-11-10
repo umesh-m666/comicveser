@@ -11,7 +11,7 @@ const sel = "w-full rounded-md border border-line bg-surface px-2 py-2 text-sm";
 function Select({ name, label, value, options }: { name: string; label: string; value?: string; options: readonly (string | readonly [string, string])[] }) {
   return (
     <label className="block text-sm"><span className="mb-1 block text-muted">{label}</span>
-      <select name={name} defaultValue={value ?? ""} className={sel}>
+      <select id={`manga-${name}`} name={name} aria-label={label} defaultValue={value ?? ""} className={sel}>
         {name !== "sort" && <option value="">Any</option>}
         {options.map((o) => { const [v, l] = typeof o === "string" ? [o, o] : o; return <option key={v} value={v}>{l}</option>; })}
       </select>
@@ -70,7 +70,7 @@ function MangaContent() {
     <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
       <form action="/manga" className="space-y-3 lg:sticky lg:top-20 lg:self-start">
         <label className="block text-sm"><span className="mb-1 block text-muted">Search</span>
-          <input name="q" defaultValue={query.q} placeholder="Search manga" className={sel} />
+          <input id="manga-search-q" name="q" aria-label="Search manga" defaultValue={query.q} placeholder="Search manga" className={sel} />
         </label>
         <Select name="genre" label="Genre" value={query.genre} options={GENRES} />
         <Select name="status" label="Status" value={query.status} options={STATUSES} />
@@ -92,7 +92,7 @@ function MangaContent() {
             <Link href="/manga" className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-semibold">Reset filters</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-5">
             {data.items.map((c) => <ComicCard key={c.slug} comic={c} />)}
           </div>
         )}

@@ -76,10 +76,13 @@ export async function api<T = any>(
   };
   const headers = buildAuthHeaders(baseHeaders);
 
+  const controller = !rest.signal && typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 15_000) : null;
   let res: Response;
   try {
     res = await fetch(`${serverBase()}${normalizedPath}`, {
       ...rest,
+      signal: rest.signal ?? controller?.signal,
       credentials: rest.credentials ?? "include",
       headers,
       body: json !== undefined ? JSON.stringify(json) : rest.body,
@@ -87,6 +90,8 @@ export async function api<T = any>(
     });
   } catch {
     throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   if (res.status === 204) return undefined as T;

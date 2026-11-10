@@ -24,16 +24,16 @@ export default function ComicForm({ initial, mode = "admin" }: { initial?: any; 
   }
   return (
     <form onSubmit={submit} className="max-w-2xl space-y-3">
-      <Field label="Title"><input name="title" required defaultValue={d.title} className={input} /></Field>
-      <Field label="Alternative title"><input name="altTitle" defaultValue={d.altTitle ?? ""} className={input} /></Field>
-      <Field label="Description"><textarea name="description" required rows={4} defaultValue={d.description} className={input} /></Field>
+      <Field label="Title"><input id="cf-title" name="title" aria-label="Title" required defaultValue={d.title} className={input} /></Field>
+      <Field label="Alternative title"><input id="cf-altTitle" name="altTitle" aria-label="Alternative title" defaultValue={d.altTitle ?? ""} className={input} /></Field>
+      <Field label="Description"><textarea id="cf-description" name="description" aria-label="Description" required rows={4} defaultValue={d.description} className={input} /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Author"><input name="author" required defaultValue={d.author} className={input} /></Field>
-        <Field label="Artist"><input name="artist" required defaultValue={d.artist} className={input} /></Field>
-        <Field label="Type"><select name="type" defaultValue={d.type ?? "MANHWA"} className={input}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
-        <Field label="Status"><select name="status" defaultValue={d.status ?? "ONGOING"} className={input}>{STATUS.map((t) => <option key={t}>{t}</option>)}</select></Field>
-        <Field label="Release year"><input name="releaseYear" type="number" min={1900} max={2100} required defaultValue={d.releaseYear ?? new Date().getFullYear()} className={input} /></Field>
-        {mode === "admin" && (<Field label="Visibility"><select name="publishState" defaultValue={d.publishState ?? "DRAFT"} className={input}>{STATES.map((t) => <option key={t}>{t}</option>)}</select></Field>)}
+        <Field label="Author"><input id="cf-author" name="author" aria-label="Author" required defaultValue={d.author} className={input} /></Field>
+        <Field label="Artist"><input id="cf-artist" name="artist" aria-label="Artist" required defaultValue={d.artist} className={input} /></Field>
+        <Field label="Type"><select id="cf-type" name="type" aria-label="Type" defaultValue={d.type ?? "MANHWA"} className={input}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select></Field>
+        <Field label="Status"><select id="cf-status" name="status" aria-label="Status" defaultValue={d.status ?? "ONGOING"} className={input}>{STATUS.map((t) => <option key={t}>{t}</option>)}</select></Field>
+        <Field label="Release year"><input id="cf-releaseYear" name="releaseYear" aria-label="Release year" type="number" min={1900} max={2100} required defaultValue={d.releaseYear ?? new Date().getFullYear()} className={input} /></Field>
+        {mode === "admin" && (<Field label="Visibility"><select id="cf-publishState" name="publishState" aria-label="Visibility" defaultValue={d.publishState ?? "DRAFT"} className={input}>{STATES.map((t) => <option key={t}>{t}</option>)}</select></Field>)}
       </div>
       <fieldset><legend className="mb-1 text-sm text-muted">Genres (up to 10)</legend>
         <div className="flex flex-wrap gap-2">{genres.data?.map((g) => (

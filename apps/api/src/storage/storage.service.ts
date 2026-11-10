@@ -140,14 +140,23 @@ export class StorageService {
   }
 
   private localPath(key: string) {
-    if (!key || key.includes("\\") || key.includes("..") || key.startsWith("/")) {
+    if (
+      !key ||
+      typeof key !== "string" ||
+      key.length > 220 ||
+      key.includes("\\") ||
+      key.includes("..") ||
+      key.includes("\0") ||
+      key.startsWith("/") ||
+      !/^(?:chapters\/[a-zA-Z0-9_-]{1,64}|comics\/covers)\/[a-zA-Z0-9_-]{1,80}\.(?:jpg|png|webp|avif)$/.test(key)
+    ) {
       throw new BadRequestException("Invalid media key.");
     }
-    const path = resolve(this.localDirectory, key);
-    if (!path.startsWith(`${this.localDirectory}/`) && !path.startsWith(`${this.localDirectory}\\`)) {
+    const resolvedPath = resolve(this.localDirectory, key);
+    if (!resolvedPath.startsWith(`${this.localDirectory}/`) && !resolvedPath.startsWith(`${this.localDirectory}\\`)) {
       throw new BadRequestException("Invalid media key.");
     }
-    return path;
+    return resolvedPath;
   }
 
   private async writeLocalFile(key: string, body: Buffer) {

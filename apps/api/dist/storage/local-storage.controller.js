@@ -17,18 +17,25 @@ exports.LocalStorageController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_guard_1 = require("../auth/auth.guard");
 const storage_service_1 = require("./storage.service");
+const SAFE_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 let LocalStorageController = class LocalStorageController {
     storage;
     constructor(storage) {
         this.storage = storage;
     }
     upload(token, contentType, request) {
+        if (!token || !SAFE_TOKEN_RE.test(token)) {
+            throw new common_1.BadRequestException("Invalid upload token.");
+        }
         return this.storage.acceptLocalUpload(token, contentType, request.body);
     }
     async media(key, response) {
         const { body, mime } = await this.storage.readLocalFile(key);
         response.setHeader("Content-Type", mime);
-        response.setHeader("Cache-Control", "public, max-age=3600");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Cross-Origin-Resource-Policy", "same-site");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+        response.setHeader("Cache-Control", "private, max-age=3600, no-transform");
         return response.send(body);
     }
 };

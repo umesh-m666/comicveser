@@ -102,6 +102,8 @@ export default function AdminReviews() {
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-card p-4 text-xs">
         <input
           type="search"
+          id="admin-reports-search"
+          aria-label="Search issue reports by user, email, subject, description, or ID"
           placeholder="Search by user, email, subject, description, ID..."
           value={q}
           onChange={(e) => {
@@ -111,6 +113,8 @@ export default function AdminReviews() {
           className="min-w-[220px] flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-fg outline-none focus:border-primary"
         />
         <select
+          id="admin-reports-status"
+          aria-label="Filter issue reports by status"
           value={statusFilter}
           onChange={(e) => {
             setPage(1);
@@ -124,6 +128,8 @@ export default function AdminReviews() {
           <option value="DISMISSED">Dismissed</option>
         </select>
         <select
+          id="admin-reports-category"
+          aria-label="Filter issue reports by category"
           value={categoryFilter}
           onChange={(e) => {
             setPage(1);
@@ -240,6 +246,7 @@ export default function AdminReviews() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <input
                     type="text"
+                    aria-label={`Admin response for report ${r.id}`}
                     placeholder="Write a response to notify the reporting user..."
                     value={draft}
                     onChange={(e) => setReplyDrafts({ ...replyDrafts, [r.id]: e.target.value })}

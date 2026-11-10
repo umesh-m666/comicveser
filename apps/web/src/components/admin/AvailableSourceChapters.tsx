@@ -478,10 +478,12 @@ export default function AvailableSourceChapters({ comicId, onImported }: { comic
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search series title…"
+              id="fallback-series-search" aria-label="Search series title" placeholder="Search series title…"
               className={`${input} min-w-[200px] flex-1 sm:max-w-xs`}
             />
             <select
+              id="fallback-provider-select"
+              aria-label="Filter alternative sources by provider"
               value={searchProvider}
               onChange={(e) => {
                 const next = e.target.value as "" | "weebcentral" | "asurascans";

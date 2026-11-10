@@ -27,6 +27,19 @@ async function bootstrap() {
     app.use((0, helmet_1.default)({
         crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
         crossOriginResourcePolicy: { policy: "cross-origin" },
+        strictTransportSecurity: { maxAge: 63072000, includeSubDomains: true, preload: true },
+        frameguard: { action: "deny" },
+        referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+        contentSecurityPolicy: {
+            useDefaults: true,
+            reportOnly: true,
+            directives: {
+                defaultSrc: ["'self'"],
+                frameAncestors: ["'none'"],
+                objectSrc: ["'none'"],
+                baseUri: ["'self'"],
+            },
+        },
     }));
     app.use((0, compression_1.default)());
     app.use((0, cookie_parser_1.default)());

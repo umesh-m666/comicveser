@@ -162,14 +162,21 @@ let StorageService = class StorageService {
         return { sha256: (0, crypto_1.createHash)("sha256").update(buf).digest("hex"), ...((0, image_1.dimensions)(buf, mime) ?? {}) };
     }
     localPath(key) {
-        if (!key || key.includes("\\") || key.includes("..") || key.startsWith("/")) {
+        if (!key ||
+            typeof key !== "string" ||
+            key.length > 220 ||
+            key.includes("\\") ||
+            key.includes("..") ||
+            key.includes("\0") ||
+            key.startsWith("/") ||
+            !/^(?:chapters\/[a-zA-Z0-9_-]{1,64}|comics\/covers)\/[a-zA-Z0-9_-]{1,80}\.(?:jpg|png|webp|avif)$/.test(key)) {
             throw new common_1.BadRequestException("Invalid media key.");
         }
-        const path = (0, path_1.resolve)(this.localDirectory, key);
-        if (!path.startsWith(`${this.localDirectory}/`) && !path.startsWith(`${this.localDirectory}\\`)) {
+        const resolvedPath = (0, path_1.resolve)(this.localDirectory, key);
+        if (!resolvedPath.startsWith(`${this.localDirectory}/`) && !resolvedPath.startsWith(`${this.localDirectory}\\`)) {
             throw new common_1.BadRequestException("Invalid media key.");
         }
-        return path;
+        return resolvedPath;
     }
     async writeLocalFile(key, body) {
         const path = this.localPath(key);

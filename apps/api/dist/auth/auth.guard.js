@@ -121,7 +121,7 @@ exports.AdminRoleGuard = AdminRoleGuard = __decorate([
 ], AdminRoleGuard);
 const Authenticated = () => (0, common_1.UseGuards)(SessionGuard);
 exports.Authenticated = Authenticated;
-const RequirePermission = (perm) => (0, common_1.applyDecorators)((0, common_1.SetMetadata)("perm", perm), (0, common_1.UseGuards)(SessionGuard, PermissionGuard));
+const RequirePermission = (perm) => (0, common_1.applyDecorators)((0, common_1.SetMetadata)("perm", perm), (0, common_1.UseGuards)(SessionGuard, AdminRoleGuard, PermissionGuard));
 exports.RequirePermission = RequirePermission;
 const RequireAdmin = () => (0, common_1.applyDecorators)((0, common_1.SetMetadata)("perm", "comic:write"), (0, common_1.UseGuards)(SessionGuard, AdminRoleGuard, PermissionGuard));
 exports.RequireAdmin = RequireAdmin;

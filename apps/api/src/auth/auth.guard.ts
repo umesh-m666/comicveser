@@ -125,7 +125,7 @@ export class AdminRoleGuard implements CanActivate {
 
 export const Authenticated = () => UseGuards(SessionGuard);
 export const RequirePermission = (perm: string) =>
-  applyDecorators(SetMetadata("perm", perm), UseGuards(SessionGuard, PermissionGuard));
+  applyDecorators(SetMetadata("perm", perm), UseGuards(SessionGuard, AdminRoleGuard, PermissionGuard));
 export const RequireAdmin = () =>
   applyDecorators(SetMetadata("perm", "comic:write"), UseGuards(SessionGuard, AdminRoleGuard, PermissionGuard));
 export const CurrentUser = createParamDecorator(

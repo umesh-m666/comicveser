@@ -1,6 +1,6 @@
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 if (process.platform === "win32" && process.arch === "x64") {
   const swcDir = path.join(__dirname, "..", "node_modules", "@next", "swc-win32-x64-msvc");
@@ -18,29 +18,23 @@ if (process.platform === "win32" && process.arch === "x64") {
         fs.closeSync(fd);
         if (buf.toString("ascii") !== "MZ") {
           corrupted = true;
-        } else {
-          // Test loading the native addon
-          require(swcBin);
         }
       }
-    } catch (err) {
-      if (err && /not a valid Win32 application|ERR_DLOPEN_FAILED/i.test(String(err.message || err))) {
-        corrupted = true;
-      }
+    } catch {
+      corrupted = true;
     }
 
     if (corrupted) {
-      console.warn("[repair-swc] Detected corrupted @next/swc-win32-x64-msvc binary (caused by previous disk-full install). Repairing...");
+      console.warn("[repair-swc] Detected truncated @next/swc-win32-x64-msvc binary. Reinstalling cleanly...");
       try {
         fs.rmSync(swcDir, { recursive: true, force: true });
-        execSync("npm i --no-save @next/swc-win32-x64-msvc@14.2.5", {
+        spawnSync("npm", ["i", "--no-save", "@next/swc-win32-x64-msvc"], {
           cwd: path.join(__dirname, ".."),
           stdio: "inherit",
+          shell: false,
         });
-        console.log("[repair-swc] Successfully repaired @next/swc-win32-x64-msvc.");
-      } catch (repairErr) {
-        console.error("[repair-swc] Automatic repair failed. Please run manually in apps/web:");
-        console.error("  Remove-Item -Recurse -Force node_modules\@next\swc-win32-x64-msvc; npm install --force");
+      } catch {
+        console.error("[repair-swc] Automatic repair failed. Remove node_modules/@next/swc-win32-x64-msvc and run npm install.");
       }
     }
   }

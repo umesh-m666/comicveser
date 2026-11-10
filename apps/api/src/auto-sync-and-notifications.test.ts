@@ -667,7 +667,7 @@ test("PART 7, 9, 10, 11: Verifies UI NotificationPopup, Unified Color Palette, N
 
   const navCode = fs.readFileSync(path.join(webSrc, "lib/nav.ts"), "utf8");
   assert.ok(!navCode.includes("/novels"), "lib/nav.ts must not contain /novels");
-  assert.ok(navCode.includes("Home") && navCode.includes("Manga") && navCode.includes("Browse") && navCode.includes("Resources") && navCode.includes("Bookmarks"));
+  assert.ok(navCode.includes("Home") && navCode.includes("Manga") && navCode.includes("Browse") && navCode.includes("Bookmarks") && !navCode.includes("Resources"));
 
   const headerCode = fs.readFileSync(path.join(webSrc, "components/Nav.tsx"), "utf8");
   assert.ok(!headerCode.includes("UpgradeLink"), "Nav.tsx must not render UpgradeLink");
@@ -677,4 +677,32 @@ test("PART 7, 9, 10, 11: Verifies UI NotificationPopup, Unified Color Palette, N
 
   const premiumPageCode = fs.readFileSync(path.join(webSrc, "app/premium/page.tsx"), "utf8");
   assert.ok(premiumPageCode.includes('redirect("/browse")'), "/premium route must cleanly redirect to /browse");
+});
+
+test("Homepage 5-section redesign, multi-cover FeaturedCarousel, 2-column LatestUpdates, Ranked PopularTabs, and 4-tab Navigation", () => {
+  const webSrc = path.resolve(__dirname, "../../web/src");
+  const pageCode = fs.readFileSync(path.join(webSrc, "app/page.tsx"), "utf8");
+
+  const idxFeatured = pageCode.indexOf("<FeaturedCarousel");
+  const idxLatest = pageCode.indexOf('title="Latest Chapter Updates"');
+  const idxTrending = pageCode.indexOf('title="Trending Comics"');
+  const idxPopular = pageCode.indexOf('title="Popular Comics"');
+  const idxAdded = pageCode.indexOf('title="Recently Added"');
+
+  assert.ok(idxFeatured > -1 && idxLatest > idxFeatured, "Latest Chapter Updates must follow FeaturedCarousel");
+  assert.ok(idxTrending > idxLatest, "Trending Comics must follow Latest Chapter Updates");
+  assert.ok(idxPopular > idxTrending, "Popular Comics must follow Trending Comics");
+  assert.ok(idxAdded > idxPopular, "Recently Added must follow Popular Comics");
+
+  const featuredCode = fs.readFileSync(path.join(webSrc, "components/FeaturedCarousel.tsx"), "utf8");
+  assert.ok(featuredCode.includes("Select featured comic") && featuredCode.includes("scale-100") && featuredCode.includes("scale-95"), "FeaturedCarousel must render horizontal covers with larger selected cover");
+
+  const latestCode = fs.readFileSync(path.join(webSrc, "components/LatestUpdates.tsx"), "utf8");
+  assert.ok(latestCode.includes("grid-cols-1") && latestCode.includes("md:grid-cols-2"), "LatestUpdates must use 1 column on mobile and 2 columns on desktop");
+
+  const popularCode = fs.readFileSync(path.join(webSrc, "components/PopularTabs.tsx"), "utf8");
+  assert.ok(popularCode.includes("Weekly") && popularCode.includes("Monthly") && popularCode.includes("All Time"), "PopularTabs must provide Weekly, Monthly, and All Time filters");
+
+  const bottomNavCode = fs.readFileSync(path.join(webSrc, "components/BottomNav.tsx"), "utf8");
+  assert.ok(bottomNavCode.includes("grid-cols-4"), "BottomNav must use 4 columns for Home, Manga, Browse, and Bookmarks");
 });

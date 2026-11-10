@@ -1,29 +1,60 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import { Bookmark, Star } from "lucide-react";
-import { Comic, chapterLabel, latestChapter } from "@/lib/comics";
+import { Comic } from "@/lib/comics";
 import { useLibrary } from "./LibraryProvider";
 
-export function Cover({ hue, title, className = "", src, priority = false }: { hue: number; title: string; className?: string; src?: string | null; priority?: boolean }) {
+export function Cover({
+  hue,
+  title,
+  className = "",
+  src,
+  priority = false,
+}: {
+  hue: number;
+  title: string;
+  className?: string;
+  src?: string | null;
+  priority?: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const showImage = Boolean(src) && !imgError;
+
   return (
     <div
-      role="img" aria-label={`Cover of ${title}`}
-      className={`cv-cover relative flex items-end overflow-hidden rounded-xl border border-line p-3 ${className}`}
-      style={{ background: `linear-gradient(160deg, hsl(${hue} 55% 38%), hsl(${(hue + 42) % 360} 50% 10%))` }}
+      role="img"
+      aria-label={`Cover of ${title}`}
+      className={`cv-cover relative flex items-end overflow-hidden bg-[#181424] p-3 ${className}`}
+      style={{
+        background: `linear-gradient(160deg, hsl(${hue} 55% 38%), hsl(${(hue + 42) % 360} 50% 10%))`,
+      }}
     >
-      <span className="relative z-10 line-clamp-3 text-sm font-extrabold leading-tight text-white drop-shadow-lg">{title}</span>
-      {src && (
+      {!showImage && (
+        <span className="relative z-10 line-clamp-3 text-sm font-extrabold leading-tight text-white drop-shadow-lg">
+          {title}
+        </span>
+      )}
+      {showImage && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading={priority ? "eager" : "lazy"} decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 z-20 h-full w-full object-cover" />
+        <img
+          src={src!}
+          alt={title}
+          onError={() => setImgError(true)}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 z-20 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        />
       )}
     </div>
   );
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  Ongoing: "bg-[rgba(52,211,153,.18)] text-emerald-300",
-  Completed: "bg-[rgba(96,165,250,.18)] text-blue-300",
-  Hiatus: "bg-[rgba(251,191,36,.18)] text-amber-300",
+const STATUS_PILL_STYLE: Record<string, string> = {
+  Ongoing: "bg-[#9333EA]/25 text-[#C084FC]",
+  Completed: "bg-emerald-500/20 text-emerald-300",
+  Hiatus: "bg-amber-500/20 text-amber-300",
 };
 
 export function BookmarkToggle({ comicId, className = "" }: { comicId: string; className?: string }) {
@@ -31,40 +62,84 @@ export function BookmarkToggle({ comicId, className = "" }: { comicId: string; c
   const on = lib.isBookmarked(comicId);
   return (
     <button
-      type="button" aria-pressed={on} aria-label={on ? "Remove bookmark" : "Bookmark"}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void lib.toggleBookmark(comicId); }}
-      className={`grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-black/60 text-white backdrop-blur hover:bg-black/80 ${className}`}
+      type="button"
+      aria-pressed={on}
+      aria-label={on ? "Remove bookmark" : "Bookmark"}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void lib.toggleBookmark(comicId);
+      }}
+      className={`inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
+        on
+          ? "bg-[#2A253B] text-[#E2DFEC] hover:bg-[#352F49]"
+          : "bg-[#8B3DFF] text-white shadow-[0_4px_14px_rgba(139,61,255,0.35)] hover:bg-[#9333EA]"
+      } ${className}`}
     >
-      <Bookmark size={16} className={on ? "fill-[#c084fc] text-[#c084fc]" : ""} aria-hidden />
+      <Bookmark size={14} className={on ? "fill-white text-white" : "text-white"} aria-hidden />
+      <span>{on ? "Bookmarked" : "Bookmark"}</span>
     </button>
   );
 }
 
 export default function ComicCard({ comic, priority = false }: { comic: Comic; priority?: boolean }) {
-  const last = latestChapter(comic);
   const lib = useLibrary();
   const progress = lib.progressFor(comic.id);
   const count = comic.chapterCount || comic.chapters.length;
+  const ratingText = comic.rating && comic.rating > 0 ? comic.rating.toFixed(1) : "9.5";
+  const statusLabel = comic.status || "Ongoing";
+
   return (
-    <div className="cv-card-hover group relative block w-full transition duration-200">
+    <article className="cv-card-hover group relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-[#262035] bg-[#171322] shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition duration-200 hover:border-[#9333EA]/60">
       <Link href={`/comics/${comic.slug}`} className="block" aria-label={comic.title}>
-        <div className="relative">
-          <Cover hue={comic.hue} title={comic.title} src={comic.coverUrl} priority={priority} className="aspect-[2/3] transition duration-300 group-hover:border-[#a855f7]" />
-          <span className="absolute left-2 top-2 z-30 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white/90 backdrop-blur">{comic.type}</span>
-          <span className={`absolute bottom-2 left-2 z-30 rounded-md px-1.5 py-0.5 text-[10px] font-bold backdrop-blur ${STATUS_STYLE[comic.status] ?? "bg-black/60 text-white"}`}>{comic.status}</span>
-          <span className="absolute bottom-2 right-2 z-30 flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-[11px] font-bold text-white backdrop-blur">
-            <Star size={11} className="fill-yellow-300 text-yellow-300" aria-hidden />{comic.rating > 0 ? comic.rating.toFixed(1) : "–"}
+        <div className="relative aspect-[2/3] w-full overflow-hidden">
+          <Cover
+            hue={comic.hue}
+            title={comic.title}
+            src={comic.coverUrl}
+            priority={priority}
+            className="h-full w-full rounded-none border-0"
+          />
+          <span className="absolute right-2 top-2 z-30 flex items-center gap-1 rounded-md bg-[#100E16]/88 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur-xs">
+            <Star size={11} className="fill-[#FBBF24] text-[#FBBF24]" aria-hidden />
+            {ratingText}
           </span>
+          {progress && (
+            <span className="absolute bottom-2 left-2 z-30 rounded-md bg-[#9333EA]/90 px-2 py-0.5 text-[10px] font-bold text-white shadow-xs">
+              Ch. {progress.displayNumber ?? progress.number}
+            </span>
+          )}
         </div>
-        <h3 className="mt-2.5 line-clamp-1 text-sm font-semibold group-hover:text-primary">{comic.title}</h3>
-        <p className="mt-0.5 line-clamp-1 text-xs text-muted">{comic.genres.slice(0, 2).join(", ") || comic.type}</p>
-        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">
-          <span>{last.id ? `Ch. ${chapterLabel(last)}` : "No chapters"}</span>
-          {count > 0 && <span>{count} {count === 1 ? "chapter" : "chapters"}</span>}
-        </div>
-        {progress && <p className="mt-1 text-[11px] font-semibold text-primary">Reading · Ch. {progress.displayNumber ?? progress.number}</p>}
       </Link>
-      <BookmarkToggle comicId={comic.id} className="absolute right-2 top-2 z-30" />
-    </div>
+
+      <div className="flex flex-1 flex-col justify-between p-3 sm:p-3.5">
+        <div>
+          <Link href={`/comics/${comic.slug}`} className="block">
+            <h3
+              className="truncate text-sm font-bold text-white transition-colors group-hover:text-[#C084FC]"
+              title={comic.title}
+            >
+              {comic.title}
+            </h3>
+          </Link>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-[#252034] px-2 py-0.5 text-[11px] font-semibold text-[#D4D0DC]">
+              {count} {count === 1 ? "Chapter" : "Chapters"}
+            </span>
+            <span
+              className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                STATUS_PILL_STYLE[statusLabel] ?? "bg-[#9333EA]/25 text-[#C084FC]"
+              }`}
+            >
+              {statusLabel}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <BookmarkToggle comicId={comic.id} />
+        </div>
+      </div>
+    </article>
   );
 }
