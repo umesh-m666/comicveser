@@ -227,6 +227,30 @@ export default function AvailableSourceChapters({ comicId, onImported }: { comic
     }
   }
 
+  async function repairComicChapters() {
+    setBusy(true);
+    setErrorMessage("");
+    setNotice("");
+    try {
+      const res = await act<{ repairedChapters: number; conflicts: number }>(
+        `/admin/sources/comics/${encodeURIComponent(comicId)}/repair`,
+        "POST",
+        {},
+      );
+      setNotice(
+        `Synchronized & repaired ${res.repairedChapters} chapter(s) from provider catalogue${
+          res.conflicts ? ` (${res.conflicts} conflict(s) logged for review)` : ""
+        }.`,
+      );
+      onImported();
+      reload();
+    } catch (e) {
+      setErrorMessage(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function importChapters(onlySelected: boolean) {
     if (!data?.source || data.source.sourceId === "comick") return;
     const idsToImport = onlySelected ? selectedChapterIds : undefined;
@@ -292,6 +316,7 @@ export default function AvailableSourceChapters({ comicId, onImported }: { comic
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => void repairComicChapters()} className={`${btnGhost} text-xs`}>{busy ? "Syncing…" : "Repair & Sync Chapter Numbers"}</button>
           {isComickPrimary && hasFallbacks && (
             <button
               type="button"

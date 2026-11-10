@@ -19,4 +19,3 @@ exports.ChaptersModule = ChaptersModule;
 exports.ChaptersModule = ChaptersModule = __decorate([
     (0, common_1.Module)({ imports: [sources_module_1.SourcesModule], controllers: [chapters_controller_1.ChaptersController, local_storage_controller_1.LocalStorageController], providers: [chapters_service_1.ChaptersService, storage_service_1.StorageService], exports: [chapters_service_1.ChaptersService] })
 ], ChaptersModule);
-//# sourceMappingURL=chapters.module.js.map

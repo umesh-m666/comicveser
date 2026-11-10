@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChaptersService = void 0;
+const chapter_display_1 = require("../sources/chapter-display");
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
@@ -49,10 +50,10 @@ let ChaptersService = class ChaptersService {
             throw new common_1.NotFoundException("Chapter not found.");
         const near = (cmp) => this.db.chapter.findFirst({
             where: { comicId: ch.comicId, publishState: "PUBLISHED", deletedAt: null, number: { [cmp]: ch.number } },
-            orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } }
+            orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } }
         });
         const [prev, next] = await Promise.all([near("lt"), near("gt")]);
-        const nav = (entry) => entry ? { id: entry.id, number: entry.number, displayNumber: entry.sourceChapter ? entry.sourceChapter.numberLabel ?? "Special" : String(entry.number) } : null;
+        const nav = (entry) => entry ? { id: entry.id, number: entry.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(entry, entry.sourceChapter) } : null;
         // Every SourceChapter retains its own SourceTitle relationship (e.g. WeebCentral or Asura Scans),
         // ensuring the reader resolves through the chapter's original source provider.
         let external = ch.sourceChapter ? {
@@ -72,7 +73,7 @@ let ChaptersService = class ChaptersService {
             alternatives = resolved.alternatives;
         }
         return {
-            id: ch.id, number: ch.number, displayNumber: ch.sourceChapter ? ch.sourceChapter.numberLabel ?? "Special" : String(ch.number), title: ch.title,
+            id: ch.id, number: ch.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(ch, ch.sourceChapter), title: ch.title,
             comic: ch.comic, imageCount: ch.sourceChapter?.pageCount ?? ch._count.images, prev: nav(prev), next: nav(next),
             ...(external && { external }),
             ...(alternatives.length > 0 && { alternatives }),

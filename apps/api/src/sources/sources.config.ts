@@ -23,3 +23,25 @@ export function loadSourcesConfig(env: Record<string, string | undefined> = proc
   if (problems.length) throw new Error(`Invalid external source configuration: ${problems.join("; ")}`);
   return cfg;
 }
+
+export interface SourceSyncConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  intervalMs: number;
+  batchSize: number;
+}
+
+export function loadSourceSyncConfig(env: Record<string, string | undefined> = process.env): SourceSyncConfig {
+  const rawEnabled = (env.SOURCE_SYNC_ENABLED ?? "true").trim().toLowerCase();
+  const enabled = rawEnabled !== "false" && rawEnabled !== "0" && env.DISABLE_JOBS !== "true";
+  const parsedInterval = Number.parseInt((env.SOURCE_SYNC_INTERVAL_MINUTES ?? "30").trim(), 10);
+  const intervalMinutes = Number.isFinite(parsedInterval) && parsedInterval >= 1 ? Math.min(parsedInterval, 1440) : 30;
+  const parsedBatch = Number.parseInt((env.SOURCE_SYNC_BATCH_SIZE ?? "20").trim(), 10);
+  const batchSize = Number.isFinite(parsedBatch) && parsedBatch >= 1 ? Math.min(parsedBatch, 200) : 20;
+  return {
+    enabled,
+    intervalMinutes,
+    intervalMs: intervalMinutes * 60_000,
+    batchSize,
+  };
+}

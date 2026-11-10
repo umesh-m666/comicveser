@@ -15,4 +15,3 @@ const crypto_ts_1 = require("./crypto.ts");
     strict_1.default.match(a, /^[A-Za-z0-9_-]+$/);
     strict_1.default.notEqual(a, b);
 });
-//# sourceMappingURL=crypto.test.js.map

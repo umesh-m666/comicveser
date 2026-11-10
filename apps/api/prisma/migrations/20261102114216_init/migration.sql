@@ -1,4 +1,3 @@
--- IDEMPOTENT_MIGRATION
 /*
   Warnings:
 
@@ -8,8 +7,8 @@
 
 */
 -- AlterTable
-ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "planCode" TEXT NOT NULL DEFAULT '',
-ADD COLUMN IF NOT EXISTS "providerOrderId" TEXT,
+ALTER TABLE "Payment" ADD COLUMN     "planCode" TEXT NOT NULL,
+ADD COLUMN     "providerOrderId" TEXT NOT NULL,
 ALTER COLUMN "providerPaymentId" DROP NOT NULL;
 
 -- CreateTable

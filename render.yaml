@@ -1,45 +1,40 @@
-# Database: hosted on Supabase (not on Render). Set DATABASE_URL to the Supabase *Session pooler* string (port 5432).
-
 services:
-  # 1. NestJS API
   - type: web
     name: comicverse-api
     runtime: node
     rootDir: apps/api
-    buildCommand: npm install --include=dev && npx prisma generate && npm run build
-    startCommand: node scripts/resolve-migrations.js && npx prisma migrate deploy && npm run db:seed && npm run start:prod
-    healthCheckPath: /api/health
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build && node scripts/resolve-migrations.js
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_URL     # Supabase Session pooler URL, port 5432 (NOT the 6543 transaction pooler)
-        sync: false
-      - key: API_PUBLIC_URL    # e.g. https://comicveser.onrender.com/api
-        sync: false
-      - key: WEB_ORIGIN          # e.g. https://comicverse-web.onrender.com (must be https, no trailing slash)
-        sync: false
-      - key: S3_BUCKET
-        sync: false
-      - key: S3_ENDPOINT
-        sync: false
-      - key: S3_REGION
-        value: auto
-      - key: S3_ACCESS_KEY_ID
-        sync: false
-      - key: S3_SECRET_ACCESS_KEY
-        sync: false
-      - key: MAIL_PROVIDER     # required in production, e.g. resend
-        sync: false
-      - key: NODE_VERSION
-        value: "20"
       - key: TRUST_PROXY
         value: "1"
-      - key: SEED_ADMIN_EMAIL
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: SOURCES_ENABLED
+        value: "true"
+      - key: SOURCE_SYNC_ENABLED
+        value: "true"
+      - key: SOURCE_SYNC_INTERVAL_MINUTES
+        value: "30"
+      - key: SOURCE_SYNC_BATCH_SIZE
+        value: "20"
+      - key: SOURCES_TIMEOUT_MS
+        value: "10000"
+      - key: MAIL_PROVIDER
+        value: resend
+      - key: DATABASE_URL
         sync: false
-      - key: SEED_ADMIN_PASSWORD
+      - key: WEB_ORIGIN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
         sync: false
 
-  # 2. Next.js web
   - type: web
     name: comicverse-web
     runtime: node
@@ -49,7 +44,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NODE_VERSION
-        value: "20"
-      - key: NEXT_PUBLIC_API_URL   # e.g. https://comicverse-api.onrender.com/api  (set BEFORE building)
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
         sync: false

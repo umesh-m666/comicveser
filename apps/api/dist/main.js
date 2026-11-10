@@ -19,16 +19,32 @@ async function bootstrap() {
     (0, config_1.assertProductionConfig)();
     const app = await core_1.NestFactory.create(app_module_1.AppModule, { rawBody: true });
     const instance = app.getHttpAdapter().getInstance();
-    const proxy = process.env.TRUST_PROXY; // e.g. "1" behind one load balancer, so rate limits see real client IPs
+    const proxy = process.env.TRUST_PROXY ?? ((0, config_1.isProd)() ? "1" : undefined);
     if (proxy)
         instance.set("trust proxy", /^\d+$/.test(proxy) ? Number(proxy) : proxy);
     app.useBodyParser("json", { limit: "1mb" }); // novel chapters can exceed the 100 KB default
     app.use(express_1.default.raw({ type: ["image/jpeg", "image/png", "image/webp", "image/avif"], limit: "10mb" }));
-    app.use((0, helmet_1.default)());
+    app.use((0, helmet_1.default)({
+        crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+    }));
     app.use((0, compression_1.default)());
     app.use((0, cookie_parser_1.default)());
     app.setGlobalPrefix("api");
-    app.enableCors({ origin: process.env.WEB_ORIGIN ?? "http://localhost:3000", credentials: true });
+    app.enableCors({
+        origin: (origin, callback) => {
+            if (!origin || (0, config_1.isOriginAllowed)(origin)) {
+                callback(null, true);
+            }
+            else {
+                callback(null, false);
+            }
+        },
+        credentials: true,
+        methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        exposedHeaders: ["Set-Cookie"],
+    });
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new errors_1.AllExceptionsFilter());
     app.enableShutdownHooks();
@@ -38,4 +54,3 @@ async function bootstrap() {
     await app.listen(process.env.PORT ?? 4000);
 }
 bootstrap();
-//# sourceMappingURL=main.js.map

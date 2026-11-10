@@ -101,6 +101,15 @@ export class SourcesController {
 
   @RequireAdmin() @Get("admin/sources") adminList() { return this.svc.adminList(); }
   @RequireAdmin() @Get("admin/sources/alerts") adminAlerts() { return this.svc.adminAlerts(); }
+  @RequireAdmin() @Get("admin/sources/sync-status") syncStatus() { return this.svc.getSyncStatus(); }
+  @RequireAdmin() @HttpCode(200) @Post("admin/sources/sync")
+  triggerSync(@CurrentUser() u: AuthUser, @Body() body?: { comicId?: string }) {
+    return this.svc.runAutomaticChapterSync({ comicId: body?.comicId, actorId: u.id });
+  }
+  @RequireAdmin() @HttpCode(200) @Post("admin/sources/comics/:comicId/repair")
+  repairComicChapters(@CurrentUser() u: AuthUser, @Param("comicId") comicId: string) {
+    return this.svc.synchronizeAndRepairComic(comicId, u.id);
+  }
   @RequireAdmin() @HttpCode(204) @Put("admin/sources/:sourceId")
   update(@CurrentUser() u: AuthUser, @Param(SOURCE) id: string, @Body() d: UpdateSourceDto) { return this.svc.updateSetting(id, d, u.id); }
   @RequireAdmin() @Throttle({ default: { limit: 10, ttl: 60_000 } }) @HttpCode(200) @Post("admin/sources/:sourceId/test") test(@Param(SOURCE) id: string) { return this.svc.test(id); }

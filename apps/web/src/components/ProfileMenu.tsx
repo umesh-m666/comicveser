@@ -49,7 +49,7 @@ export default function ProfileMenu() {
         {isAdmin && <Link role="menuitem" href="/admin" tabIndex={tab} data-tone="admin" className="cv-menu-item"><ShieldCheck size={18} aria-hidden />Admin Panel</Link>}
         <Link role="menuitem" href="/account" tabIndex={tab} className="cv-menu-item"><UserRound size={18} aria-hidden />Profile</Link>
         <Link role="menuitem" href="/profile/notifications?tab=messages" tabIndex={tab} className="cv-menu-item"><MessageSquare size={18} aria-hidden />Messages</Link>
-        <Link role="menuitem" href="/profile/notifications?tab=alerts" tabIndex={tab} className="cv-menu-item"><Bell size={18} aria-hidden />Alerts</Link>
+        <Link role="menuitem" href="/profile/notifications?tab=chapters" tabIndex={tab} className="cv-menu-item"><Bell size={18} aria-hidden />Chapters & Alerts</Link>
         <Link role="menuitem" href="/profile/settings" tabIndex={tab} className="cv-menu-item"><Settings size={18} aria-hidden />Settings</Link>
         <div className="cv-menu-sep" />
         <button type="button" role="menuitem" tabIndex={tab} data-tone="danger" className="cv-menu-item" onClick={() => { setOpen(false); void logout(); }}><LogOut size={18} aria-hidden />Log out</button>

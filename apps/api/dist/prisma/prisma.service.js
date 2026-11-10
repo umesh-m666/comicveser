@@ -29,6 +29,66 @@ let PrismaService = class PrismaService extends client_1.PrismaClient {
             await this.$executeRawUnsafe(`
         CREATE UNIQUE INDEX IF NOT EXISTS "SourceTitle_comicId_sourceId_key" ON "SourceTitle"("comicId", "sourceId");
       `);
+            // Google OAuth & authentication provider columns (preserves all existing users)
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleId" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "authProvider" TEXT NOT NULL DEFAULT 'local';
+      `);
+            await this.$executeRawUnsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "User_googleId_key" ON "User"("googleId");
+      `);
+            // Issue reporting & Admin messages columns (preserves all existing reports)
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'GENERAL';
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "subject" TEXT NOT NULL DEFAULT '';
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL DEFAULT '';
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "comicId" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "chapterId" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "isRead" BOOLEAN NOT NULL DEFAULT false;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "adminResponse" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "respondedAt" TIMESTAMP(3);
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "respondedById" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Report_reporterId_createdAt_idx" ON "Report"("reporterId", "createdAt");
+      `);
+            await this.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "Report_isRead_status_createdAt_idx" ON "Report"("isRead", "status", "createdAt");
+      `);
+            // Automatic chapter sync & notification metadata columns (additive, preserves all existing rows)
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "SourceTitle" ADD COLUMN IF NOT EXISTS "lastSyncedAt" TIMESTAMP(3);
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "SourceTitle" ADD COLUMN IF NOT EXISTS "lastSyncStatus" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "SourceTitle" ADD COLUMN IF NOT EXISTS "lastSyncError" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "SourceChapter" ADD COLUMN IF NOT EXISTS "originalLabel" TEXT;
+      `);
+            await this.$executeRawUnsafe(`
+        ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "meta" JSONB;
+      `);
             // Ensure any soft-deleted comic is marked ARCHIVED so it never appears as PUBLISHED.
             await this.$executeRawUnsafe(`
         UPDATE "Comic"
@@ -142,6 +202,43 @@ let PrismaService = class PrismaService extends client_1.PrismaClient {
         }
         catch {
             return new Map(ids.map((id) => [id, "PRIMARY"]));
+        }
+    }
+    inMemoryLocks = new Map();
+    /**
+     * Acquires a PostgreSQL session/transaction-safe advisory lock (with in-memory lease fallback for test mocks)
+     * so multiple Render API workers never run overlapping background chapter syncs.
+     */
+    async tryAcquireSyncLock(lockId = 72839401, ttlMs = 10 * 60_000) {
+        const now = Date.now();
+        const existingExpiry = this.inMemoryLocks.get(lockId) ?? 0;
+        if (existingExpiry > now) {
+            return false;
+        }
+        this.inMemoryLocks.set(lockId, now + ttlMs);
+        if (typeof this.$queryRawUnsafe === "function") {
+            try {
+                const rows = await this.$queryRawUnsafe(`SELECT pg_try_advisory_lock($1) AS "locked"`, lockId);
+                if (Array.isArray(rows) && rows.length > 0 && rows[0].locked === false) {
+                    this.inMemoryLocks.delete(lockId);
+                    return false;
+                }
+            }
+            catch {
+                // Fallback to in-memory lock in unit test environments
+            }
+        }
+        return true;
+    }
+    async releaseSyncLock(lockId = 72839401) {
+        this.inMemoryLocks.delete(lockId);
+        if (typeof this.$queryRawUnsafe === "function") {
+            try {
+                await this.$queryRawUnsafe(`SELECT pg_advisory_unlock($1)`, lockId);
+            }
+            catch {
+                // Ignore in unit test environments
+            }
         }
     }
 };

@@ -16,7 +16,7 @@ export default function Terms() {
         <li>Do not attack, overload or probe the site's security. If you find a vulnerability, please tell us at <Contact />.</li>
       </ul>
       <h2>Content and creators</h2>
-      <p>Comics and novels belong to their creators and licensors. Creators who submit work confirm that they own it or are licensed to distribute it here, that it does not infringe anyone's rights, and that the rights information they provide is accurate. We review submissions and may decline, unpublish or remove content at any time.</p>
+      <p>Comics and series belong to their creators and licensors. Creators who submit work confirm that they own it or are licensed to distribute it here, that it does not infringe anyone's rights, and that the rights information they provide is accurate. We review submissions and may decline, unpublish or remove content at any time.</p>
       <h2>Reviews and ratings</h2>
       <p>You keep ownership of what you write and give us permission to display it on the site. We may remove content that breaks these terms.</p>
       <h2>Memberships</h2>

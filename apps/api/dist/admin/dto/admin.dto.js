@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreatorStatusDto = exports.AnnouncementDto = exports.ResolveReportDto = exports.SetStatusDto = exports.AdminListQuery = void 0;
 const client_1 = require("@prisma/client");
@@ -17,6 +18,9 @@ class AdminListQuery {
     q;
     state;
     comicId;
+    reportStatus;
+    category;
+    unreadOnly;
     page = 1;
 }
 exports.AdminListQuery = AdminListQuery;
@@ -29,7 +33,7 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.PublishState),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_a = typeof client_1.PublishState !== "undefined" && client_1.PublishState) === "function" ? _a : Object)
 ], AdminListQuery.prototype, "state", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
@@ -37,6 +41,22 @@ __decorate([
     (0, class_validator_1.Length)(10, 40),
     __metadata("design:type", String)
 ], AdminListQuery.prototype, "comicId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(["OPEN", "RESOLVED", "DISMISSED"]),
+    __metadata("design:type", String)
+], AdminListQuery.prototype, "reportStatus", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 40),
+    __metadata("design:type", String)
+], AdminListQuery.prototype, "category", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], AdminListQuery.prototype, "unreadOnly", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
@@ -50,16 +70,29 @@ class SetStatusDto {
 exports.SetStatusDto = SetStatusDto;
 __decorate([
     (0, class_validator_1.IsEnum)(client_1.UserStatus),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_b = typeof client_1.UserStatus !== "undefined" && client_1.UserStatus) === "function" ? _b : Object)
 ], SetStatusDto.prototype, "status", void 0);
 class ResolveReportDto {
     status;
+    adminResponse;
+    isRead;
 }
 exports.ResolveReportDto = ResolveReportDto;
 __decorate([
-    (0, class_validator_1.IsIn)(["RESOLVED", "DISMISSED"]),
+    (0, class_validator_1.IsIn)(["OPEN", "RESOLVED", "DISMISSED"]),
     __metadata("design:type", String)
 ], ResolveReportDto.prototype, "status", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(0, 2000),
+    __metadata("design:type", String)
+], ResolveReportDto.prototype, "adminResponse", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], ResolveReportDto.prototype, "isRead", void 0);
 class AnnouncementDto {
     title;
     body;
@@ -89,4 +122,3 @@ __decorate([
     (0, class_validator_1.IsIn)(["APPROVED", "REJECTED", "SUSPENDED"]),
     __metadata("design:type", String)
 ], CreatorStatusDto.prototype, "status", void 0);
-//# sourceMappingURL=admin.dto.js.map

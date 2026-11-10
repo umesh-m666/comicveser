@@ -1,3 +1,4 @@
+import { resolveChapterDisplayNumber, resolveChapterPublishedAt } from "../sources/chapter-display";
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { CacheService } from "../cache/cache.service";
@@ -57,7 +58,7 @@ export class ComicsService {
     const latest = await this.db.chapter.findMany({
       where: { comicId: { in: items.map((i) => i.id) }, publishState: "PUBLISHED", deletedAt: null },
       orderBy: [{ comicId: "asc" }, { number: "desc" }], distinct: ["comicId"],
-      select: { id: true, comicId: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } },
+      select: { id: true, comicId: true, number: true, title: true, publishedAt: true, sourceChapter: { select: { numberLabel: true, title: true, publishedAt: true } } },
     });
     const lm = new Map(latest.map((c) => [c.comicId, c]));
     const counts = await this.db.chapter.groupBy({
@@ -68,7 +69,7 @@ export class ComicsService {
       const latestChapter = lm.get(i.id);
       return {
         ...i, rating: m.get(i.id)?._avg.value ?? null, ratingCount: m.get(i.id)?._count ?? 0, chapterCount: cm.get(i.id) ?? 0,
-        latestChapter: latestChapter ? { id: latestChapter.id, number: latestChapter.number, displayNumber: latestChapter.sourceChapter ? latestChapter.sourceChapter.numberLabel ?? "Special" : String(latestChapter.number), publishedAt: latestChapter.publishedAt } : null,
+        latestChapter: latestChapter ? { id: latestChapter.id, number: latestChapter.number, displayNumber: resolveChapterDisplayNumber(latestChapter, latestChapter.sourceChapter), publishedAt: resolveChapterPublishedAt(latestChapter, latestChapter.sourceChapter) } : null,
         coverUrl: (i as { externalCoverUrl?: string | null }).externalCoverUrl ?? await this.mediaUrl((i as { coverKey?: string | null }).coverKey),
         bannerUrl: await this.mediaUrl((i as { bannerKey?: string | null }).bannerKey),
       };
@@ -173,9 +174,9 @@ export class ComicsService {
     if (!comic) throw new NotFoundException("Comic not found.");
     const rows = await this.db.chapter.findMany({
       where: { comicId, publishState: "PUBLISHED", deletedAt: null }, orderBy: { number: order },
-      select: { id: true, number: true, title: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } },
+      select: { id: true, number: true, title: true, publishedAt: true, sourceChapter: { select: { numberLabel: true, title: true, publishedAt: true } } },
     });
-    return rows.map(({ sourceChapter, ...chapter }) => ({ ...chapter, displayNumber: sourceChapter ? sourceChapter.numberLabel ?? "Special" : String(chapter.number) }));
+    return rows.map(({ sourceChapter, ...chapter }) => ({ ...chapter, publishedAt: resolveChapterPublishedAt(chapter, sourceChapter), displayNumber: resolveChapterDisplayNumber(chapter, sourceChapter) }));
   }
 
   async genreConnect(slugs: string[]) {

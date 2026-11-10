@@ -265,4 +265,3 @@ __decorate([
     (0, class_validator_1.Max)(500),
     __metadata("design:type", Number)
 ], ImportAlternativeChaptersDto.prototype, "limit", void 0);
-//# sourceMappingURL=sources.dto.js.map

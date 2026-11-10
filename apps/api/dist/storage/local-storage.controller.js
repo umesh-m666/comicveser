@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LocalStorageController = void 0;
 const common_1 = require("@nestjs/common");
@@ -53,6 +54,5 @@ __decorate([
 ], LocalStorageController.prototype, "media", null);
 exports.LocalStorageController = LocalStorageController = __decorate([
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [storage_service_1.StorageService])
+    __metadata("design:paramtypes", [typeof (_a = typeof storage_service_1.StorageService !== "undefined" && storage_service_1.StorageService) === "function" ? _a : Object])
 ], LocalStorageController);
-//# sourceMappingURL=local-storage.controller.js.map

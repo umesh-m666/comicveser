@@ -139,8 +139,7 @@ export default function AccountDashboard() {
               <Tile href="/profile/external-library" label="Saved sources" hint="Titles saved from external sources" Icon={Library} />
               <Tile href="/profile/reviews" label="My reviews" hint="Reviews you have written" Icon={Star} />
               <Tile href="/profile/settings" label="Account management" hint="Change password or delete account" Icon={Settings} />
-              {user.role !== "ADMIN" && <Tile href="/premium" label="Premium plans" hint="Plans and billing" Icon={Sparkles} />}
-              {user.role !== "ADMIN" && <Tile href="/creator/dashboard" label="Creator portal" hint="Publish and manage your own comics" Icon={PenLine} />}
+                            {user.role !== "ADMIN" && <Tile href="/creator/dashboard" label="Creator portal" hint="Publish and manage your own comics" Icon={PenLine} />}
             </div>
           </section>
           <section aria-labelledby="np-h" className={panel}>

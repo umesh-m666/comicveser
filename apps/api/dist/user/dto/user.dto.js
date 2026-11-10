@@ -141,4 +141,3 @@ __decorate([
     (0, class_validator_1.Length)(1, 128),
     __metadata("design:type", String)
 ], DeleteAccountDto.prototype, "password", void 0);
-//# sourceMappingURL=user.dto.js.map

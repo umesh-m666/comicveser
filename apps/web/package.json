@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "predev": "node scripts/repair-swc.js",
+    "prebuild": "node scripts/repair-swc.js"
   },
   "dependencies": {
     "lucide-react": "^0.400.0",

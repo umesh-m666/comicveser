@@ -3,16 +3,18 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "prisma generate && node scripts/resolve-migrations.js --deploy && nest build",
+    "build": "prisma generate && nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "start:dev": "prisma generate && nest start --watch",
-    "db:seed": "node scripts/resolve-migrations.js && tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/seed.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "postinstall": "prisma generate",
-    "db:deploy": "node scripts/resolve-migrations.js && prisma migrate deploy"
+    "db:migrate:deploy": "node scripts/resolve-migrations.js",
+    "prestart:prod": "node scripts/resolve-migrations.js",
+    "render:build": "npm install --include=dev && npx prisma generate && npm run build && node scripts/resolve-migrations.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.650.0",

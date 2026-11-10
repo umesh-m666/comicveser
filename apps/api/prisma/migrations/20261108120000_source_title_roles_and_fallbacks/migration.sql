@@ -1,4 +1,3 @@
--- IDEMPOTENT_MIGRATION
 -- Allow a Comic to have a PRIMARY SourceTitle (e.g. ComicK) and CHAPTER_FALLBACK SourceTitles (WeebCentral, Asura Scans).
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SourceTitleRole') THEN

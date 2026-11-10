@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChaptersController = void 0;
 const common_1 = require("@nestjs/common");
@@ -44,7 +45,7 @@ __decorate([
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, chapter_dto_1.ImagesQuery]),
+    __metadata("design:paramtypes", [String, typeof (_b = typeof chapter_dto_1.ImagesQuery !== "undefined" && chapter_dto_1.ImagesQuery) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "images", null);
 __decorate([
@@ -53,7 +54,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, chapter_dto_1.CreateChapterDto]),
+    __metadata("design:paramtypes", [typeof (_c = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _c : Object, typeof (_d = typeof chapter_dto_1.CreateChapterDto !== "undefined" && chapter_dto_1.CreateChapterDto) === "function" ? _d : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "create", null);
 __decorate([
@@ -63,7 +64,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, chapter_dto_1.UpdateChapterDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _e : Object, String, typeof (_f = typeof chapter_dto_1.UpdateChapterDto !== "undefined" && chapter_dto_1.UpdateChapterDto) === "function" ? _f : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "update", null);
 __decorate([
@@ -72,7 +73,7 @@ __decorate([
     (0, common_1.Post)("admin/uploads"),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [chapter_dto_1.UploadUrlDto]),
+    __metadata("design:paramtypes", [typeof (_g = typeof chapter_dto_1.UploadUrlDto !== "undefined" && chapter_dto_1.UploadUrlDto) === "function" ? _g : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "uploadUrl", null);
 __decorate([
@@ -82,7 +83,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, chapter_dto_1.RegisterImagesDto]),
+    __metadata("design:paramtypes", [typeof (_h = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _h : Object, String, typeof (_j = typeof chapter_dto_1.RegisterImagesDto !== "undefined" && chapter_dto_1.RegisterImagesDto) === "function" ? _j : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "register", null);
 __decorate([
@@ -93,12 +94,11 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, chapter_dto_1.ReorderDto]),
+    __metadata("design:paramtypes", [typeof (_k = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _k : Object, String, typeof (_l = typeof chapter_dto_1.ReorderDto !== "undefined" && chapter_dto_1.ReorderDto) === "function" ? _l : Object]),
     __metadata("design:returntype", void 0)
 ], ChaptersController.prototype, "reorder", null);
 exports.ChaptersController = ChaptersController = __decorate([
     (0, swagger_1.ApiTags)("chapters"),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [chapters_service_1.ChaptersService])
+    __metadata("design:paramtypes", [typeof (_a = typeof chapters_service_1.ChaptersService !== "undefined" && chapters_service_1.ChaptersService) === "function" ? _a : Object])
 ], ChaptersController);
-//# sourceMappingURL=chapters.controller.js.map

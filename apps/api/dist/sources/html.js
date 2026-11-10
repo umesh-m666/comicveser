@@ -58,4 +58,3 @@ function voidElements(html, name) {
         result.push(attributes(match[0]));
     return result;
 }
-//# sourceMappingURL=html.js.map

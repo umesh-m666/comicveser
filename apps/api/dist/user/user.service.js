@@ -43,6 +43,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserService = void 0;
+const chapter_display_1 = require("../sources/chapter-display");
 const common_1 = require("@nestjs/common");
 const argon2 = __importStar(require("argon2"));
 const prisma_service_1 = require("../prisma/prisma.service");
@@ -97,14 +98,14 @@ let UserService = class UserService {
             take: 1000,
             include: { comic: { select: { id: true, slug: true, title: true, type: true, status: true, coverKey: true, externalCoverUrl: true, chapters: {
                             where: { publishState: "PUBLISHED", deletedAt: null }, orderBy: { number: "desc" }, take: 1,
-                            select: { id: true, number: true, publishedAt: true, sourceChapter: { select: { numberLabel: true } } }
+                            select: { id: true, number: true, title: true, publishedAt: true, sourceChapter: { select: { numberLabel: true, title: true, publishedAt: true } } }
                         } } } },
         });
         const comicIds = rows.map((r) => r.comicId);
         const [totals, reads, history] = await Promise.all([
             this.db.chapter.groupBy({ by: ["comicId"], where: { comicId: { in: comicIds }, ...this.visibleChapter }, _count: { _all: true } }),
             this.db.chapterRead.groupBy({ by: ["comicId"], where: { userId, comicId: { in: comicIds }, chapter: this.visibleChapter }, _count: { _all: true }, _max: { readAt: true } }),
-            this.db.readingHistory.findMany({ where: { userId, comicId: { in: comicIds } }, include: { chapter: { select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } } } }),
+            this.db.readingHistory.findMany({ where: { userId, comicId: { in: comicIds } }, include: { chapter: { select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } } } } }),
         ]);
         const totalBy = new Map(totals.map((t) => [t.comicId, t._count._all]));
         const readBy = new Map(reads.map((r) => [r.comicId, { count: r._count._all, last: r._max.readAt }]));
@@ -116,8 +117,8 @@ let UserService = class UserService {
             const manual = b.status ?? null;
             const status = (0, bookmark_status_1.effectiveStatus)({ manual, readCount: read?.count ?? 0, hasHistory: !!hist, totalChapters: total, comicCompleted: b.comic.status === "COMPLETED" });
             const latest = b.comic.chapters[0];
-            const latestLabel = latest ? (latest.sourceChapter ? latest.sourceChapter.numberLabel ?? "Special" : String(latest.number)) : null;
-            const lastUpdatedAt = latest?.publishedAt ?? b.updatedAt;
+            const latestLabel = latest ? (0, chapter_display_1.resolveChapterDisplayNumber)(latest, latest.sourceChapter) : null;
+            const lastUpdatedAt = (latest ? (0, chapter_display_1.resolveChapterPublishedAt)(latest, latest.sourceChapter) : null) ?? b.updatedAt;
             const lastReadAt = hist?.updatedAt ?? read?.last ?? null;
             return {
                 title: b.comic.title, bookmarkedAt: b.createdAt, lastUpdatedAt,
@@ -126,11 +127,11 @@ let UserService = class UserService {
                     comic: {
                         id: b.comic.id, slug: b.comic.slug, title: b.comic.title, type: b.comic.type, status: b.comic.status,
                         coverUrl: await this.coverUrl(b.comic), totalChapters: total,
-                        latestChapter: latest ? { id: latest.id, number: latest.number, publishedAt: latest.publishedAt, displayNumber: latestLabel } : null,
+                        latestChapter: latest ? { id: latest.id, number: latest.number, publishedAt: (0, chapter_display_1.resolveChapterPublishedAt)(latest, latest.sourceChapter), displayNumber: latestLabel } : null,
                     },
                     progress: {
                         readCount: read?.count ?? 0, percent: (0, bookmark_status_1.progressPercent)(read?.count ?? 0, total), lastReadAt,
-                        current: hist ? { chapterId: hist.chapter.id, number: hist.chapter.number, displayNumber: hist.chapter.sourceChapter ? hist.chapter.sourceChapter.numberLabel ?? "Special" : String(hist.chapter.number), imageIndex: hist.imageIndex } : null,
+                        current: hist ? { chapterId: hist.chapter.id, number: hist.chapter.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(hist.chapter, hist.chapter.sourceChapter), imageIndex: hist.imageIndex } : null,
                     },
                 },
             };
@@ -178,10 +179,10 @@ let UserService = class UserService {
     async readChapters(userId) {
         const rows = await this.db.chapterRead.findMany({
             where: { userId, chapter: this.visibleChapter, comic: this.visibleComic }, orderBy: { readAt: "desc" }, take: 30,
-            include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } } },
+            include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } } } },
         });
         return rows.map((r) => ({ comic: r.comic, readAt: r.readAt,
-            chapter: { id: r.chapter.id, number: r.chapter.number, displayNumber: r.chapter.sourceChapter ? r.chapter.sourceChapter.numberLabel ?? "Special" : String(r.chapter.number) } }));
+            chapter: { id: r.chapter.id, number: r.chapter.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(r.chapter, r.chapter.sourceChapter) } }));
     }
     async stats(userId) {
         const [lib, chaptersRead, comicsStarted] = await Promise.all([
@@ -215,10 +216,10 @@ let UserService = class UserService {
     }
     async history(userId) {
         const rows = await this.db.readingHistory.findMany({ where: { userId, comic: this.visibleComic, chapter: { publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceChapter: { is: null } }, { sourceChapter: { is: { sourceTitle: { state: "APPROVED" } } } }] } }, orderBy: { updatedAt: "desc" }, take: 50,
-            include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true } } } } } });
+            include: { comic: { select: { id: true, slug: true, title: true } }, chapter: { select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } } } } });
         return rows.map((r) => {
             const { sourceChapter, ...chapter } = r.chapter;
-            return { comic: r.comic, chapter: { ...chapter, displayNumber: sourceChapter ? sourceChapter.numberLabel ?? "Special" : String(chapter.number) }, imageIndex: r.imageIndex, scrollY: r.scrollY, lastReadAt: r.updatedAt };
+            return { comic: r.comic, chapter: { ...chapter, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(chapter, sourceChapter) }, imageIndex: r.imageIndex, scrollY: r.scrollY, lastReadAt: r.updatedAt };
         });
     }
     async reviews(userId) {

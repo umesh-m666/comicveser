@@ -47,4 +47,3 @@ const le24 = (n) => [n & 255, (n >> 8) & 255, (n >> 16) & 255];
     strict_1.default.equal((0, image_ts_1.dimensions)(pad([0, 0, 0, 0x20, ...ascii("ftypavif")]), "image/avif"), null);
     strict_1.default.equal((0, image_ts_1.dimensions)(Buffer.from([0xff, 0xd8, 0xff]), "image/jpeg"), null);
 });
-//# sourceMappingURL=image.test.js.map

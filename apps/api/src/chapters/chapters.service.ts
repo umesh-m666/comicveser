@@ -1,3 +1,4 @@
+import { resolveChapterDisplayNumber } from "../sources/chapter-display";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -32,9 +33,9 @@ export class ChaptersService {
     if (!ch || (ch.sourceChapter && ch.sourceChapter.sourceTitle.state !== "APPROVED")) throw new NotFoundException("Chapter not found.");
     const near = (cmp: "lt" | "gt") => this.db.chapter.findFirst({
       where: { comicId: ch.comicId, publishState: "PUBLISHED", deletedAt: null, number: { [cmp]: ch.number } },
-      orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } });
+      orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } } });
     const [prev, next] = await Promise.all([near("lt"), near("gt")]);
-    const nav = (entry: typeof prev) => entry ? { id: entry.id, number: entry.number, displayNumber: entry.sourceChapter ? entry.sourceChapter.numberLabel ?? "Special" : String(entry.number) } : null;
+    const nav = (entry: typeof prev) => entry ? { id: entry.id, number: entry.number, displayNumber: resolveChapterDisplayNumber(entry, entry.sourceChapter) } : null;
 
     // Every SourceChapter retains its own SourceTitle relationship (e.g. WeebCentral or Asura Scans),
     // ensuring the reader resolves through the chapter's original source provider.
@@ -57,7 +58,7 @@ export class ChaptersService {
     }
 
     return {
-      id: ch.id, number: ch.number, displayNumber: ch.sourceChapter ? ch.sourceChapter.numberLabel ?? "Special" : String(ch.number), title: ch.title,
+      id: ch.id, number: ch.number, displayNumber: resolveChapterDisplayNumber(ch, ch.sourceChapter), title: ch.title,
       comic: ch.comic, imageCount: ch.sourceChapter?.pageCount ?? ch._count.images, prev: nav(prev), next: nav(next),
       ...(external && { external }),
       ...(alternatives.length > 0 && { alternatives }),

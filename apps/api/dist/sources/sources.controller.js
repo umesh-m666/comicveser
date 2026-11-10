@@ -72,6 +72,13 @@ let SourcesController = class SourcesController {
     }
     adminList() { return this.svc.adminList(); }
     adminAlerts() { return this.svc.adminAlerts(); }
+    syncStatus() { return this.svc.getSyncStatus(); }
+    triggerSync(u, body) {
+        return this.svc.runAutomaticChapterSync({ comicId: body?.comicId, actorId: u.id });
+    }
+    repairComicChapters(u, comicId) {
+        return this.svc.synchronizeAndRepairComic(comicId, u.id);
+    }
     update(u, id, d) { return this.svc.updateSetting(id, d, u.id); }
     test(id) { return this.svc.test(id); }
     sendCover(res, body, contentType) {
@@ -385,6 +392,33 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "adminAlerts", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, common_1.Get)("admin/sources/sync-status"),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], SourcesController.prototype, "syncStatus", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, common_1.HttpCode)(200),
+    (0, common_1.Post)("admin/sources/sync"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], SourcesController.prototype, "triggerSync", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, common_1.HttpCode)(200),
+    (0, common_1.Post)("admin/sources/comics/:comicId/repair"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)("comicId")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], SourcesController.prototype, "repairComicChapters", null);
 __decorate([
     (0, auth_guard_1.RequireAdmin)(),
     (0, common_1.HttpCode)(204),

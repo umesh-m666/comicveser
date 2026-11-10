@@ -1,4 +1,3 @@
--- IDEMPOTENT_MIGRATION
 -- External sources (MangaDex): admin source settings and readers' saved titles.
 -- Additive only: two new tables. No existing table is altered or dropped.
 
@@ -40,4 +39,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ExternalLibraryEntry_userId_sourceId_external
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "ExternalLibraryEntry" ADD CONSTRAINT "ExternalLibraryEntry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;

@@ -9,7 +9,7 @@ import LibraryProvider from "@/components/LibraryProvider";
 
 export const metadata: Metadata = {
   title: { default: "ComicVerse - Read manga, manhwa, manhua and webtoons", template: "%s | ComicVerse" },
-  description: "Discover and read original and licensed comics and novels.",
+  description: "Discover and read manga, manhwa, manhua, and webtoons on ComicVerse.",
 };
 export const viewport: Viewport = { themeColor: "#100e16", viewportFit: "cover" };
 

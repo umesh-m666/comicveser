@@ -20,4 +20,3 @@ __decorate([
     (0, class_validator_1.Length)(1, 60),
     __metadata("design:type", String)
 ], GenreDto.prototype, "name", void 0);
-//# sourceMappingURL=genre.dto.js.map

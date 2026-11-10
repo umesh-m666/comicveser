@@ -24,25 +24,66 @@ let AdminController = class AdminController {
     constructor(svc) {
         this.svc = svc;
     }
-    dashboard() { return this.svc.dashboard(); }
-    comics(q) { return this.svc.comics(q); }
-    comic(id) { return this.svc.comic(id); }
-    chapters(q) { return this.svc.chapters(q.comicId); }
-    chapter(id) { return this.svc.chapter(id); }
-    deleteImage(u, id, imageId) { return this.svc.deleteImage(id, imageId, u.id); }
-    bulk(u, id, file) { return this.svc.bulkZip(id, file, u.id); }
-    users(q) { return this.svc.users(q); }
-    status(u, id, d) { return this.svc.setUserStatus(id, d.status, u.id); }
-    reports(q) { return this.svc.reports(q.page); }
-    resolve(u, id, d) { return this.svc.resolveReport(id, d.status, u.id); }
-    audit(q) { return this.svc.auditLogs(q.page); }
-    announcements() { return this.svc.announcements(); }
-    createAnn(u, d) { return this.svc.createAnnouncement(d, u.id); }
-    deleteAnn(u, id) { return this.svc.deleteAnnouncement(id, u.id); }
-    creators() { return this.svc.creators(); }
-    creatorStatus(u, id, d) { return this.svc.setCreatorStatus(id, d.status, u.id); }
-    reviews(q) { return this.svc.reviews(q.page); }
-    publicAnnouncements() { return this.svc.publicAnnouncements(); }
+    dashboard() {
+        return this.svc.dashboard();
+    }
+    adminNotifications(u, filter, page) {
+        return this.svc.adminNotifications(u.id, { filter, page: page ? Number.parseInt(page, 10) || 1 : 1 });
+    }
+    comics(q) {
+        return this.svc.comics(q);
+    }
+    comic(id) {
+        return this.svc.comic(id);
+    }
+    chapters(q) {
+        return this.svc.chapters(q.comicId);
+    }
+    chapter(id) {
+        return this.svc.chapter(id);
+    }
+    deleteImage(u, id, imageId) {
+        return this.svc.deleteImage(id, imageId, u.id);
+    }
+    bulk(u, id, file) {
+        return this.svc.bulkZip(id, file, u.id);
+    }
+    users(q) {
+        return this.svc.users(q);
+    }
+    status(u, id, d) {
+        return this.svc.setUserStatus(id, d.status, u.id);
+    }
+    reports(q) {
+        return this.svc.reports(q);
+    }
+    resolve(u, id, d) {
+        return this.svc.resolveReport(id, d, u.id);
+    }
+    audit(q) {
+        return this.svc.auditLogs(q.page);
+    }
+    announcements() {
+        return this.svc.announcements();
+    }
+    createAnn(u, d) {
+        return this.svc.createAnnouncement(d, u.id);
+    }
+    deleteAnn(u, id) {
+        return this.svc.deleteAnnouncement(id, u.id);
+    }
+    creators() {
+        return this.svc.creators();
+    }
+    creatorStatus(u, id, d) {
+        return this.svc.setCreatorStatus(id, d.status, u.id);
+    }
+    reviews(q) {
+        return this.svc.reviews(q.page);
+    }
+    publicAnnouncements() {
+        return this.svc.publicAnnouncements();
+    }
 };
 exports.AdminController = AdminController;
 __decorate([
@@ -52,6 +93,16 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AdminController.prototype, "dashboard", null);
+__decorate([
+    (0, auth_guard_1.RequireAdmin)(),
+    (0, common_1.Get)("admin/notifications"),
+    __param(0, (0, auth_guard_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)("filter")),
+    __param(2, (0, common_1.Query)("page")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], AdminController.prototype, "adminNotifications", null);
 __decorate([
     (0, auth_guard_1.RequirePermission)("comic:write"),
     (0, common_1.Get)("admin/comics"),
@@ -135,7 +186,6 @@ __decorate([
 ], AdminController.prototype, "reports", null);
 __decorate([
     (0, auth_guard_1.RequirePermission)("review:moderate"),
-    (0, common_1.HttpCode)(204),
     (0, common_1.Put)("admin/reports/:id"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("id")),
