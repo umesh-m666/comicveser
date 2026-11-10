@@ -1,3 +1,4 @@
+-- IDEMPOTENT_MIGRATION
 /*
   Warnings:
 
@@ -7,12 +8,12 @@
 
 */
 -- AlterTable
-ALTER TABLE "Payment" ADD COLUMN     "planCode" TEXT NOT NULL,
-ADD COLUMN     "providerOrderId" TEXT NOT NULL,
+ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "planCode" TEXT NOT NULL DEFAULT '',
+ADD COLUMN IF NOT EXISTS "providerOrderId" TEXT,
 ALTER COLUMN "providerPaymentId" DROP NOT NULL;
 
 -- CreateTable
-CREATE TABLE "AnalyticsEvent" (
+CREATE TABLE IF NOT EXISTS "AnalyticsEvent" (
     "id" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     "userId" TEXT,
@@ -26,13 +27,13 @@ CREATE TABLE "AnalyticsEvent" (
 );
 
 -- CreateIndex
-CREATE INDEX "AnalyticsEvent_createdAt_idx" ON "AnalyticsEvent"("createdAt");
+CREATE INDEX IF NOT EXISTS "AnalyticsEvent_createdAt_idx" ON "AnalyticsEvent"("createdAt");
 
 -- CreateIndex
-CREATE INDEX "AnalyticsEvent_type_createdAt_idx" ON "AnalyticsEvent"("type", "createdAt");
+CREATE INDEX IF NOT EXISTS "AnalyticsEvent_type_createdAt_idx" ON "AnalyticsEvent"("type", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "AnalyticsEvent_comicId_idx" ON "AnalyticsEvent"("comicId");
+CREATE INDEX IF NOT EXISTS "AnalyticsEvent_comicId_idx" ON "AnalyticsEvent"("comicId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Payment_providerOrderId_key" ON "Payment"("providerOrderId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Payment_providerOrderId_key" ON "Payment"("providerOrderId");

@@ -1,35 +1,56 @@
+-- IDEMPOTENT_MIGRATION
 -- CreateEnum
-CREATE TYPE "ComicType" AS ENUM ('MANGA', 'MANHWA', 'MANHUA', 'WEBTOON');
+DO $$ BEGIN
+    CREATE TYPE "ComicType" AS ENUM ('MANGA', 'MANHWA', 'MANHUA', 'WEBTOON');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ComicStatus" AS ENUM ('ONGOING', 'COMPLETED', 'HIATUS');
+DO $$ BEGIN
+    CREATE TYPE "ComicStatus" AS ENUM ('ONGOING', 'COMPLETED', 'HIATUS');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "PublishState" AS ENUM ('DRAFT', 'PENDING', 'PUBLISHED', 'UNPUBLISHED', 'ARCHIVED');
+DO $$ BEGIN
+    CREATE TYPE "PublishState" AS ENUM ('DRAFT', 'PENDING', 'PUBLISHED', 'UNPUBLISHED', 'ARCHIVED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED');
+DO $$ BEGIN
+    CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "CreatorStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED');
+DO $$ BEGIN
+    CREATE TYPE "CreatorStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "ReportStatus" AS ENUM ('OPEN', 'RESOLVED', 'DISMISSED');
+DO $$ BEGIN
+    CREATE TYPE "ReportStatus" AS ENUM ('OPEN', 'RESOLVED', 'DISMISSED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('NEW_CHAPTER', 'BOOKMARK_UPDATE', 'CREATOR_ANNOUNCEMENT', 'REVIEW_REPLY', 'ACCOUNT', 'PLATFORM');
+DO $$ BEGIN
+    CREATE TYPE "NotificationType" AS ENUM ('NEW_CHAPTER', 'BOOKMARK_UPDATE', 'CREATOR_ANNOUNCEMENT', 'REVIEW_REPLY', 'ACCOUNT', 'PLATFORM');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "SubscriptionStatus" AS ENUM ('ACTIVE', 'CANCELED', 'PAST_DUE', 'EXPIRED');
+DO $$ BEGIN
+    CREATE TYPE "SubscriptionStatus" AS ENUM ('ACTIVE', 'CANCELED', 'PAST_DUE', 'EXPIRED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "AuthTokenType" AS ENUM ('EMAIL_VERIFY', 'PASSWORD_RESET');
+DO $$ BEGIN
+    CREATE TYPE "AuthTokenType" AS ENUM ('EMAIL_VERIFY', 'PASSWORD_RESET');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateEnum
-CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'REFUNDED');
+DO $$ BEGIN
+    CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'SUCCEEDED', 'FAILED', 'REFUNDED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- CreateTable
-CREATE TABLE "Role" (
+CREATE TABLE IF NOT EXISTS "Role" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
 
@@ -37,7 +58,7 @@ CREATE TABLE "Role" (
 );
 
 -- CreateTable
-CREATE TABLE "Permission" (
+CREATE TABLE IF NOT EXISTS "Permission" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
 
@@ -45,7 +66,7 @@ CREATE TABLE "Permission" (
 );
 
 -- CreateTable
-CREATE TABLE "User" (
+CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL,
     "username" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -61,7 +82,7 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
-CREATE TABLE "UserProfile" (
+CREATE TABLE IF NOT EXISTS "UserProfile" (
     "userId" TEXT NOT NULL,
     "avatarUrl" TEXT,
     "bio" TEXT,
@@ -72,7 +93,7 @@ CREATE TABLE "UserProfile" (
 );
 
 -- CreateTable
-CREATE TABLE "Comic" (
+CREATE TABLE IF NOT EXISTS "Comic" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -95,7 +116,7 @@ CREATE TABLE "Comic" (
 );
 
 -- CreateTable
-CREATE TABLE "Chapter" (
+CREATE TABLE IF NOT EXISTS "Chapter" (
     "id" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
     "number" DOUBLE PRECISION NOT NULL,
@@ -111,7 +132,7 @@ CREATE TABLE "Chapter" (
 );
 
 -- CreateTable
-CREATE TABLE "ChapterImage" (
+CREATE TABLE IF NOT EXISTS "ChapterImage" (
     "id" TEXT NOT NULL,
     "chapterId" TEXT NOT NULL,
     "position" INTEGER NOT NULL,
@@ -124,7 +145,7 @@ CREATE TABLE "ChapterImage" (
 );
 
 -- CreateTable
-CREATE TABLE "Genre" (
+CREATE TABLE IF NOT EXISTS "Genre" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -133,7 +154,7 @@ CREATE TABLE "Genre" (
 );
 
 -- CreateTable
-CREATE TABLE "ComicGenre" (
+CREATE TABLE IF NOT EXISTS "ComicGenre" (
     "comicId" TEXT NOT NULL,
     "genreId" TEXT NOT NULL,
 
@@ -141,7 +162,7 @@ CREATE TABLE "ComicGenre" (
 );
 
 -- CreateTable
-CREATE TABLE "Bookmark" (
+CREATE TABLE IF NOT EXISTS "Bookmark" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
@@ -151,7 +172,7 @@ CREATE TABLE "Bookmark" (
 );
 
 -- CreateTable
-CREATE TABLE "ReadingHistory" (
+CREATE TABLE IF NOT EXISTS "ReadingHistory" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
@@ -164,7 +185,7 @@ CREATE TABLE "ReadingHistory" (
 );
 
 -- CreateTable
-CREATE TABLE "Rating" (
+CREATE TABLE IF NOT EXISTS "Rating" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
@@ -175,7 +196,7 @@ CREATE TABLE "Rating" (
 );
 
 -- CreateTable
-CREATE TABLE "Review" (
+CREATE TABLE IF NOT EXISTS "Review" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
@@ -189,7 +210,7 @@ CREATE TABLE "Review" (
 );
 
 -- CreateTable
-CREATE TABLE "Comment" (
+CREATE TABLE IF NOT EXISTS "Comment" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
@@ -202,7 +223,7 @@ CREATE TABLE "Comment" (
 );
 
 -- CreateTable
-CREATE TABLE "Notification" (
+CREATE TABLE IF NOT EXISTS "Notification" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "type" "NotificationType" NOT NULL,
@@ -215,7 +236,7 @@ CREATE TABLE "Notification" (
 );
 
 -- CreateTable
-CREATE TABLE "Announcement" (
+CREATE TABLE IF NOT EXISTS "Announcement" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "body" TEXT NOT NULL,
@@ -228,7 +249,7 @@ CREATE TABLE "Announcement" (
 );
 
 -- CreateTable
-CREATE TABLE "Banner" (
+CREATE TABLE IF NOT EXISTS "Banner" (
     "id" TEXT NOT NULL,
     "imageKey" TEXT NOT NULL,
     "href" TEXT NOT NULL,
@@ -241,7 +262,7 @@ CREATE TABLE "Banner" (
 );
 
 -- CreateTable
-CREATE TABLE "Creator" (
+CREATE TABLE IF NOT EXISTS "Creator" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "displayName" TEXT NOT NULL,
@@ -252,7 +273,7 @@ CREATE TABLE "Creator" (
 );
 
 -- CreateTable
-CREATE TABLE "CreatorComic" (
+CREATE TABLE IF NOT EXISTS "CreatorComic" (
     "creatorId" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
 
@@ -260,7 +281,7 @@ CREATE TABLE "CreatorComic" (
 );
 
 -- CreateTable
-CREATE TABLE "ContentLicense" (
+CREATE TABLE IF NOT EXISTS "ContentLicense" (
     "id" TEXT NOT NULL,
     "comicId" TEXT NOT NULL,
     "holder" TEXT NOT NULL,
@@ -274,7 +295,7 @@ CREATE TABLE "ContentLicense" (
 );
 
 -- CreateTable
-CREATE TABLE "Report" (
+CREATE TABLE IF NOT EXISTS "Report" (
     "id" TEXT NOT NULL,
     "reporterId" TEXT NOT NULL,
     "targetType" TEXT NOT NULL,
@@ -288,7 +309,7 @@ CREATE TABLE "Report" (
 );
 
 -- CreateTable
-CREATE TABLE "AuditLog" (
+CREATE TABLE IF NOT EXISTS "AuditLog" (
     "id" TEXT NOT NULL,
     "actorId" TEXT,
     "actorLabel" TEXT,
@@ -302,7 +323,7 @@ CREATE TABLE "AuditLog" (
 );
 
 -- CreateTable
-CREATE TABLE "Novel" (
+CREATE TABLE IF NOT EXISTS "Novel" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -320,7 +341,7 @@ CREATE TABLE "Novel" (
 );
 
 -- CreateTable
-CREATE TABLE "NovelChapter" (
+CREATE TABLE IF NOT EXISTS "NovelChapter" (
     "id" TEXT NOT NULL,
     "novelId" TEXT NOT NULL,
     "number" DOUBLE PRECISION NOT NULL,
@@ -334,7 +355,7 @@ CREATE TABLE "NovelChapter" (
 );
 
 -- CreateTable
-CREATE TABLE "SubscriptionPlan" (
+CREATE TABLE IF NOT EXISTS "SubscriptionPlan" (
     "id" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -347,7 +368,7 @@ CREATE TABLE "SubscriptionPlan" (
 );
 
 -- CreateTable
-CREATE TABLE "Subscription" (
+CREATE TABLE IF NOT EXISTS "Subscription" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "planId" TEXT NOT NULL,
@@ -360,7 +381,7 @@ CREATE TABLE "Subscription" (
 );
 
 -- CreateTable
-CREATE TABLE "Payment" (
+CREATE TABLE IF NOT EXISTS "Payment" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "subscriptionId" TEXT,
@@ -374,7 +395,7 @@ CREATE TABLE "Payment" (
 );
 
 -- CreateTable
-CREATE TABLE "Session" (
+CREATE TABLE IF NOT EXISTS "Session" (
     "id" TEXT NOT NULL,
     "tokenHash" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -386,7 +407,7 @@ CREATE TABLE "Session" (
 );
 
 -- CreateTable
-CREATE TABLE "AuthToken" (
+CREATE TABLE IF NOT EXISTS "AuthToken" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "type" "AuthTokenType" NOT NULL,
@@ -399,220 +420,288 @@ CREATE TABLE "AuthToken" (
 );
 
 -- CreateTable
-CREATE TABLE "_PermissionToRole" (
+CREATE TABLE IF NOT EXISTS "_PermissionToRole" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Role_name_key" ON "Role"("name");
+CREATE UNIQUE INDEX IF NOT EXISTS "Role_name_key" ON "Role"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Permission_key_key" ON "Permission"("key");
+CREATE UNIQUE INDEX IF NOT EXISTS "Permission_key_key" ON "Permission"("key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Comic_slug_key" ON "Comic"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "Comic_slug_key" ON "Comic"("slug");
 
 -- CreateIndex
-CREATE INDEX "Comic_publishState_updatedAt_idx" ON "Comic"("publishState", "updatedAt");
+CREATE INDEX IF NOT EXISTS "Comic_publishState_updatedAt_idx" ON "Comic"("publishState", "updatedAt");
 
 -- CreateIndex
-CREATE INDEX "Comic_publishState_views_idx" ON "Comic"("publishState", "views");
+CREATE INDEX IF NOT EXISTS "Comic_publishState_views_idx" ON "Comic"("publishState", "views");
 
 -- CreateIndex
-CREATE INDEX "Comic_title_idx" ON "Comic"("title");
+CREATE INDEX IF NOT EXISTS "Comic_title_idx" ON "Comic"("title");
 
 -- CreateIndex
-CREATE INDEX "Chapter_comicId_publishState_publishedAt_idx" ON "Chapter"("comicId", "publishState", "publishedAt");
+CREATE INDEX IF NOT EXISTS "Chapter_comicId_publishState_publishedAt_idx" ON "Chapter"("comicId", "publishState", "publishedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Chapter_comicId_number_key" ON "Chapter"("comicId", "number");
+CREATE UNIQUE INDEX IF NOT EXISTS "Chapter_comicId_number_key" ON "Chapter"("comicId", "number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ChapterImage_chapterId_position_key" ON "ChapterImage"("chapterId", "position");
+CREATE UNIQUE INDEX IF NOT EXISTS "ChapterImage_chapterId_position_key" ON "ChapterImage"("chapterId", "position");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ChapterImage_chapterId_sha256_key" ON "ChapterImage"("chapterId", "sha256");
+CREATE UNIQUE INDEX IF NOT EXISTS "ChapterImage_chapterId_sha256_key" ON "ChapterImage"("chapterId", "sha256");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Genre_slug_key" ON "Genre"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "Genre_slug_key" ON "Genre"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Genre_name_key" ON "Genre"("name");
+CREATE UNIQUE INDEX IF NOT EXISTS "Genre_name_key" ON "Genre"("name");
 
 -- CreateIndex
-CREATE INDEX "ComicGenre_genreId_idx" ON "ComicGenre"("genreId");
+CREATE INDEX IF NOT EXISTS "ComicGenre_genreId_idx" ON "ComicGenre"("genreId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Bookmark_userId_comicId_key" ON "Bookmark"("userId", "comicId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Bookmark_userId_comicId_key" ON "Bookmark"("userId", "comicId");
 
 -- CreateIndex
-CREATE INDEX "ReadingHistory_userId_updatedAt_idx" ON "ReadingHistory"("userId", "updatedAt");
+CREATE INDEX IF NOT EXISTS "ReadingHistory_userId_updatedAt_idx" ON "ReadingHistory"("userId", "updatedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ReadingHistory_userId_comicId_key" ON "ReadingHistory"("userId", "comicId");
+CREATE UNIQUE INDEX IF NOT EXISTS "ReadingHistory_userId_comicId_key" ON "ReadingHistory"("userId", "comicId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Rating_userId_comicId_key" ON "Rating"("userId", "comicId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Rating_userId_comicId_key" ON "Rating"("userId", "comicId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Review_userId_comicId_key" ON "Review"("userId", "comicId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Review_userId_comicId_key" ON "Review"("userId", "comicId");
 
 -- CreateIndex
-CREATE INDEX "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
+CREATE INDEX IF NOT EXISTS "Notification_userId_readAt_createdAt_idx" ON "Notification"("userId", "readAt", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Creator_userId_key" ON "Creator"("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Creator_userId_key" ON "Creator"("userId");
 
 -- CreateIndex
-CREATE INDEX "Report_status_createdAt_idx" ON "Report"("status", "createdAt");
+CREATE INDEX IF NOT EXISTS "Report_status_createdAt_idx" ON "Report"("status", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_resource_resourceId_idx" ON "AuditLog"("resource", "resourceId");
+CREATE INDEX IF NOT EXISTS "AuditLog_resource_resourceId_idx" ON "AuditLog"("resource", "resourceId");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Novel_slug_key" ON "Novel"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "Novel_slug_key" ON "Novel"("slug");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "NovelChapter_novelId_number_key" ON "NovelChapter"("novelId", "number");
+CREATE UNIQUE INDEX IF NOT EXISTS "NovelChapter_novelId_number_key" ON "NovelChapter"("novelId", "number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SubscriptionPlan_code_key" ON "SubscriptionPlan"("code");
+CREATE UNIQUE INDEX IF NOT EXISTS "SubscriptionPlan_code_key" ON "SubscriptionPlan"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Subscription_providerRef_key" ON "Subscription"("providerRef");
+CREATE UNIQUE INDEX IF NOT EXISTS "Subscription_providerRef_key" ON "Subscription"("providerRef");
 
 -- CreateIndex
-CREATE INDEX "Subscription_userId_status_idx" ON "Subscription"("userId", "status");
+CREATE INDEX IF NOT EXISTS "Subscription_userId_status_idx" ON "Subscription"("userId", "status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Payment_providerPaymentId_key" ON "Payment"("providerPaymentId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Payment_providerPaymentId_key" ON "Payment"("providerPaymentId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "Session_tokenHash_key" ON "Session"("tokenHash");
 
 -- CreateIndex
-CREATE INDEX "Session_userId_idx" ON "Session"("userId");
+CREATE INDEX IF NOT EXISTS "Session_userId_idx" ON "Session"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AuthToken_tokenHash_key" ON "AuthToken"("tokenHash");
+CREATE UNIQUE INDEX IF NOT EXISTS "AuthToken_tokenHash_key" ON "AuthToken"("tokenHash");
 
 -- CreateIndex
-CREATE INDEX "AuthToken_userId_type_idx" ON "AuthToken"("userId", "type");
+CREATE INDEX IF NOT EXISTS "AuthToken_userId_type_idx" ON "AuthToken"("userId", "type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_PermissionToRole_AB_unique" ON "_PermissionToRole"("A", "B");
+CREATE UNIQUE INDEX IF NOT EXISTS "_PermissionToRole_AB_unique" ON "_PermissionToRole"("A", "B");
 
 -- CreateIndex
-CREATE INDEX "_PermissionToRole_B_index" ON "_PermissionToRole"("B");
+CREATE INDEX IF NOT EXISTS "_PermissionToRole_B_index" ON "_PermissionToRole"("B");
 
 -- AddForeignKey
-ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "UserProfile" ADD CONSTRAINT "UserProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "UserProfile" ADD CONSTRAINT "UserProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Chapter" ADD CONSTRAINT "Chapter_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Chapter" ADD CONSTRAINT "Chapter_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ChapterImage" ADD CONSTRAINT "ChapterImage_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ChapterImage" ADD CONSTRAINT "ChapterImage_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ComicGenre" ADD CONSTRAINT "ComicGenre_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ComicGenre" ADD CONSTRAINT "ComicGenre_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ComicGenre" ADD CONSTRAINT "ComicGenre_genreId_fkey" FOREIGN KEY ("genreId") REFERENCES "Genre"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ComicGenre" ADD CONSTRAINT "ComicGenre_genreId_fkey" FOREIGN KEY ("genreId") REFERENCES "Genre"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Bookmark" ADD CONSTRAINT "Bookmark_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Bookmark" ADD CONSTRAINT "Bookmark_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Bookmark" ADD CONSTRAINT "Bookmark_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Bookmark" ADD CONSTRAINT "Bookmark_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ReadingHistory" ADD CONSTRAINT "ReadingHistory_chapterId_fkey" FOREIGN KEY ("chapterId") REFERENCES "Chapter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Rating" ADD CONSTRAINT "Rating_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Rating" ADD CONSTRAINT "Rating_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Rating" ADD CONSTRAINT "Rating_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Rating" ADD CONSTRAINT "Rating_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Review" ADD CONSTRAINT "Review_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Review" ADD CONSTRAINT "Review_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Review" ADD CONSTRAINT "Review_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Review" ADD CONSTRAINT "Review_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Comment" ADD CONSTRAINT "Comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Comment" ADD CONSTRAINT "Comment_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Comment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Comment" ADD CONSTRAINT "Comment_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Comment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Creator" ADD CONSTRAINT "Creator_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Creator" ADD CONSTRAINT "Creator_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "CreatorComic" ADD CONSTRAINT "CreatorComic_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "Creator"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "CreatorComic" ADD CONSTRAINT "CreatorComic_creatorId_fkey" FOREIGN KEY ("creatorId") REFERENCES "Creator"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "CreatorComic" ADD CONSTRAINT "CreatorComic_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "CreatorComic" ADD CONSTRAINT "CreatorComic_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "ContentLicense" ADD CONSTRAINT "ContentLicense_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "ContentLicense" ADD CONSTRAINT "ContentLicense_comicId_fkey" FOREIGN KEY ("comicId") REFERENCES "Comic"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Report" ADD CONSTRAINT "Report_reporterId_fkey" FOREIGN KEY ("reporterId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Report" ADD CONSTRAINT "Report_reporterId_fkey" FOREIGN KEY ("reporterId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "NovelChapter" ADD CONSTRAINT "NovelChapter_novelId_fkey" FOREIGN KEY ("novelId") REFERENCES "Novel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "NovelChapter" ADD CONSTRAINT "NovelChapter_novelId_fkey" FOREIGN KEY ("novelId") REFERENCES "Novel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Payment" ADD CONSTRAINT "Payment_subscriptionId_fkey" FOREIGN KEY ("subscriptionId") REFERENCES "Subscription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "Session" ADD CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "AuthToken" ADD CONSTRAINT "AuthToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "AuthToken" ADD CONSTRAINT "AuthToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "_PermissionToRole" ADD CONSTRAINT "_PermissionToRole_A_fkey" FOREIGN KEY ("A") REFERENCES "Permission"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "_PermissionToRole" ADD CONSTRAINT "_PermissionToRole_A_fkey" FOREIGN KEY ("A") REFERENCES "Permission"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AddForeignKey
-ALTER TABLE "_PermissionToRole" ADD CONSTRAINT "_PermissionToRole_B_fkey" FOREIGN KEY ("B") REFERENCES "Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+    ALTER TABLE "_PermissionToRole" ADD CONSTRAINT "_PermissionToRole_B_fkey" FOREIGN KEY ("B") REFERENCES "Role"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

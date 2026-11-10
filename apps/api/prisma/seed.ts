@@ -23,28 +23,41 @@ async function main() {
 
   if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
     const role = await db.role.findUniqueOrThrow({ where: { name: "ADMIN" } });
-    await db.user.upsert({
-      where: { email: process.env.SEED_ADMIN_EMAIL.toLowerCase() }, update: {},
-      create: { username: "admin", email: process.env.SEED_ADMIN_EMAIL.toLowerCase(), emailVerifiedAt: new Date(), roleId: role.id,
-        passwordHash: await argon2.hash(process.env.SEED_ADMIN_PASSWORD, { type: argon2.argon2id }) },
-    });
+    const email = process.env.SEED_ADMIN_EMAIL.toLowerCase().trim();
+    const existingByEmail = await db.user.findUnique({ where: { email } });
+    if (!existingByEmail) {
+      const existingAdminUsername = await db.user.findUnique({ where: { username: "admin" } });
+      const username = existingAdminUsername ? `admin_${Date.now().toString(36).slice(-4)}` : "admin";
+      await db.user.create({
+        data: {
+          username,
+          email,
+          emailVerifiedAt: new Date(),
+          roleId: role.id,
+          passwordHash: await argon2.hash(process.env.SEED_ADMIN_PASSWORD, { type: argon2.argon2id }),
+        },
+      });
+    }
   }
   for (const name of GENRES) await db.genre.upsert({ where: { slug: slugify(name) }, update: {}, create: { name, slug: slugify(name) } });
 
-  for (const c of COMICS) {
-    const slug = slugify(c.title);
-    if (await db.comic.findUnique({ where: { slug } })) continue;
-    await db.comic.create({
-      data: {
-        slug, title: c.title, altTitle: c.altTitle, description: c.description, author: c.author, artist: c.artist,
-        type: c.type, status: c.status, releaseYear: c.year, publishState: "PUBLISHED", views: Math.floor(Math.random() * 90000),
-        genres: { create: c.genres.map((g) => ({ genre: { connect: { slug: slugify(g) } } })) },
-        chapters: { create: Array.from({ length: c.chapters }, (_, i) => ({
-          number: i + 1, title: `Chapter ${i + 1}`, publishState: "PUBLISHED" as const,
-          publishedAt: new Date(Date.now() - (c.chapters - i) * 6048e5),
-        })) },
-      },
-    });
+  const existingComicCount = await db.comic.count();
+  if (existingComicCount === 0) {
+    for (const c of COMICS) {
+      const slug = slugify(c.title);
+      if (await db.comic.findUnique({ where: { slug } })) continue;
+      await db.comic.create({
+        data: {
+          slug, title: c.title, altTitle: c.altTitle, description: c.description, author: c.author, artist: c.artist,
+          type: c.type, status: c.status, releaseYear: c.year, publishState: "PUBLISHED", views: Math.floor(Math.random() * 90000),
+          genres: { create: c.genres.map((g) => ({ genre: { connect: { slug: slugify(g) } } })) },
+          chapters: { create: Array.from({ length: c.chapters }, (_, i) => ({
+            number: i + 1, title: `Chapter ${i + 1}`, publishState: "PUBLISHED" as const,
+            publishedAt: new Date(Date.now() - (c.chapters - i) * 6048e5),
+          })) },
+        },
+      });
+    }
   }
   // Example plans (prices in paise). Edit via PUT /api/admin/plans/:id.
   for (const pl of [{ code: "premium_monthly", name: "Premium Monthly", priceMinor: 14900, intervalMonths: 1 }, { code: "premium_yearly", name: "Premium Yearly", priceMinor: 149900, intervalMonths: 12 }])

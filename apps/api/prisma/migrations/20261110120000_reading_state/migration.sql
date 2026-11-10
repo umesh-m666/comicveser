@@ -1,3 +1,4 @@
+-- IDEMPOTENT_MIGRATION
 -- Reading state: per-chapter "read" tracking and optional manual bookmark shelves.
 -- Additive and idempotent: existing bookmarks, history and users are preserved.
 

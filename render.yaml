@@ -7,7 +7,7 @@ services:
     runtime: node
     rootDir: apps/api
     buildCommand: npm install --include=dev && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm run db:seed && npm run start:prod
+    startCommand: node scripts/resolve-migrations.js && npx prisma migrate deploy && npm run db:seed && npm run start:prod
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
