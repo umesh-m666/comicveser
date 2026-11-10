@@ -8,8 +8,9 @@ import { useLoad } from "@/lib/useApi";
 
 type Provider = { id: string; displayName: string; enabled: boolean };
 
-export default function SourceTitleReviewPage() {
-  const params = useParams<{ sourceId: string; externalId: string }>();
+export default function SourceTitleReviewPage(props?: { params?: { sourceId?: string; externalId?: string } }) {
+  const routeParams = useParams<{ sourceId: string; externalId: string }>();
+  const params = props?.params ?? routeParams;
   const sourceId = String(params.sourceId ?? "");
   const externalId = String(params.externalId ?? "");
   const { data, error, loading } = useLoad<{ enabled: boolean; sources: Provider[] }>("/admin/sources");
