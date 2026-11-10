@@ -1378,7 +1378,7 @@ export class SourcesService {
     }
 
     try {
-      const result = await (this.db.$transaction as any)(async (tx: any) => {
+      const result = await this.db.$transaction(async (tx) => {
         const existing = await tx.sourceTitle.findUnique({
           where: { sourceId_externalId: { sourceId, externalId } },
           include: { comic: { select: { id: true, slug: true, deletedAt: true, publishState: true } } },
@@ -1404,13 +1404,13 @@ export class SourcesService {
           },
           select: { id: true, title: true, slug: true, deletedAt: true },
         });
-        const duplicateComics = (candidateDups ?? []).filter((c) => {
+        const duplicateComics = (candidateDups ?? []).filter((c: { id: string; title: string; slug: string; deletedAt: Date | null }) => {
           if (c.deletedAt !== null) return c.slug.startsWith(slugBase);
           const key = normalizeMatchText(c.title).replace(/\s+/g, "");
           return !!targetNormKey && key === targetNormKey;
         });
         if (duplicateComics.length > 0) {
-          const dupIds = duplicateComics.map((c) => c.id);
+          const dupIds = duplicateComics.map((c: { id: string }) => c.id);
           await tx.sourceTitle.deleteMany({ where: { comicId: { in: dupIds } } });
           const now = new Date();
           await tx.chapter.updateMany({
@@ -1708,7 +1708,7 @@ export class SourcesService {
 
     const orderedCandidates = [...candidates].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 
-    const imported = await (this.db.$transaction as any)(async (tx: any) => {
+    const imported = await this.db.$transaction(async (tx) => {
       if (typeof (tx.chapter as any).deleteMany === "function") {
         await tx.chapter.deleteMany({ where: { comicId, deletedAt: { not: null } } }).catch(() => {});
       }
@@ -2157,8 +2157,8 @@ export class SourcesService {
     };
 
     if (safeNumberUpdates.length > 0) {
-      await (this.db.$transaction as any)(
-        async (tx: any) => {
+      await this.db.$transaction(
+        async (tx) => {
           // Phase 1: Move chapters whose numbers are changing to temporary high numbers
           for (let i = 0; i < safeNumberUpdates.length; i++) {
             const p = safeNumberUpdates[i];
@@ -2343,7 +2343,7 @@ export class SourcesService {
           where: { sourceTitleId: st.id },
           select: { externalId: true, chapterId: true },
         });
-        const knownExternalIds = new Set(existingSourceChapters.map((r) => r.externalId));
+        const knownExternalIds = new Set(existingSourceChapters.map((r: { externalId: string }) => r.externalId));
         const newItems = catalogueItems
           .filter((item) => item?.id && !knownExternalIds.has(item.id))
           .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
@@ -2367,8 +2367,8 @@ export class SourcesService {
           },
           orderBy: { number: "asc" },
         });
-        const usedNumbers = new Set<number>(comicChapters.map((c) => c.number));
-        const maxNum = comicChapters.reduce((m, c) => Math.max(m, c.number), 0);
+        const usedNumbers = new Set<number>(comicChapters.map((c: { number: number }) => c.number));
+        const maxNum = comicChapters.reduce((m: number, c: { number: number }) => Math.max(m, c.number), 0);
         const nextSequentialRef = { value: Math.floor(maxNum) + 1 };
 
         for (const item of newItems) {
@@ -2401,7 +2401,7 @@ export class SourcesService {
           // Never overwrite manually uploaded chapters
           if (isNumeric) {
             const conflictingManual = comicChapters.find(
-              (c) => Math.abs(c.number - item.number!) < 0.0001 && (!c.sourceChapter || (c._count?.images ?? 0) > 0),
+              (c: any) => Math.abs(c.number - item.number!) < 0.0001 && (!c.sourceChapter || (c._count?.images ?? 0) > 0),
             );
             if (conflictingManual) {
               totalConflicts++;

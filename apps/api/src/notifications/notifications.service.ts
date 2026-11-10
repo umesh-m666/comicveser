@@ -325,25 +325,25 @@ export class NotificationsService {
       if (!rows.length) break;
       cursor = rows[rows.length - 1].id;
 
-      const enabledTargets = rows.filter((r) => (r.user?.profile?.notifyPrefs as any)?.newChapter !== false);
+      const enabledTargets = rows.filter((r: any) => (r.user?.profile?.notifyPrefs as any)?.newChapter !== false);
       if (!enabledTargets.length) continue;
 
       // Prevent duplicate notifications for the same chapter href
       const existingForChapter = await this.db.notification.findMany({
         where: {
-          userId: { in: enabledTargets.map((t) => t.userId) },
+          userId: { in: enabledTargets.map((t: { userId: string }) => t.userId) },
           type: "NEW_CHAPTER",
           href,
         },
         select: { userId: true },
       }).catch(() => [] as { userId: string }[]);
-      const alreadyNotifiedIds = new Set(existingForChapter.map((e) => e.userId));
-      const targets = enabledTargets.filter((t) => !alreadyNotifiedIds.has(t.userId));
+      const alreadyNotifiedIds = new Set(existingForChapter.map((e: { userId: string }) => e.userId));
+      const targets = enabledTargets.filter((t: { userId: string }) => !alreadyNotifiedIds.has(t.userId));
       if (!targets.length) continue;
 
       try {
         await (this.db.notification as any).createMany({
-          data: targets.map((r) => ({
+          data: targets.map((r: { userId: string }) => ({
             userId: r.userId,
             type: "NEW_CHAPTER" as const,
             title: title.slice(0, 200),
@@ -354,7 +354,7 @@ export class NotificationsService {
         });
       } catch {
         await this.db.notification.createMany({
-          data: targets.map((r) => ({
+          data: targets.map((r: { userId: string }) => ({
             userId: r.userId,
             type: "NEW_CHAPTER" as const,
             title: title.slice(0, 200),
