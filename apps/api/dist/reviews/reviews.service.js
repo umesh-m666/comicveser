@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReviewsModule = exports.ReviewsController = exports.ReviewsService = exports.ReportDto = exports.ISSUE_CATEGORIES = void 0;
 const common_1 = require("@nestjs/common");
@@ -368,9 +369,7 @@ let ReviewsService = class ReviewsService {
 exports.ReviewsService = ReviewsService;
 exports.ReviewsService = ReviewsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        notifications_service_1.NotificationsService,
-        mail_service_1.MailService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _b : Object, typeof (_c = typeof mail_service_1.MailService !== "undefined" && mail_service_1.MailService) === "function" ? _c : Object])
 ], ReviewsService);
 let ReviewsController = class ReviewsController {
     svc;
@@ -420,7 +419,7 @@ __decorate([
     __param(1, (0, common_1.Param)("comicId")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, RateDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _d : Object, String, RateDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "rate", null);
 __decorate([
@@ -430,7 +429,7 @@ __decorate([
     __param(1, (0, common_1.Param)("comicId")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, BodyDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _e : Object, String, BodyDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "review", null);
 __decorate([
@@ -440,7 +439,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_f = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _f : Object, String]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "helpful", null);
 __decorate([
@@ -450,7 +449,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_g = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _g : Object, String]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "delReview", null);
 __decorate([
@@ -460,7 +459,7 @@ __decorate([
     __param(1, (0, common_1.Param)("comicId")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, CommentDto]),
+    __metadata("design:paramtypes", [typeof (_h = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _h : Object, String, CommentDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "comment", null);
 __decorate([
@@ -470,7 +469,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_j = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _j : Object, String]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "delComment", null);
 __decorate([
@@ -479,7 +478,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, ReportDto]),
+    __metadata("design:paramtypes", [typeof (_k = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _k : Object, ReportDto]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "report", null);
 __decorate([
@@ -487,7 +486,7 @@ __decorate([
     (0, common_1.Get)("reports/mine"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [typeof (_l = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _l : Object]),
     __metadata("design:returntype", void 0)
 ], ReviewsController.prototype, "myReports", null);
 exports.ReviewsController = ReviewsController = __decorate([
@@ -505,4 +504,3 @@ exports.ReviewsModule = ReviewsModule = __decorate([
         exports: [ReviewsService],
     })
 ], ReviewsModule);
-//# sourceMappingURL=reviews.service.js.map

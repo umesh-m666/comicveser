@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BillingModule = exports.BillingController = exports.BillingService = void 0;
 const common_1 = require("@nestjs/common");
@@ -208,7 +209,7 @@ let BillingService = class BillingService {
 exports.BillingService = BillingService;
 exports.BillingService = BillingService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], BillingService);
 let BillingController = class BillingController {
     svc;
@@ -238,7 +239,7 @@ __decorate([
     (0, common_1.Get)("billing/status"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [typeof (_b = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "status", null);
 __decorate([
@@ -246,7 +247,7 @@ __decorate([
     (0, common_1.Get)("billing/history"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [typeof (_c = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _c : Object]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "history", null);
 __decorate([
@@ -257,7 +258,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, CheckoutDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _d : Object, CheckoutDto]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "checkout", null);
 __decorate([
@@ -268,7 +269,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, VerifyDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _e : Object, VerifyDto]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "verify", null);
 __decorate([
@@ -277,7 +278,7 @@ __decorate([
     (0, common_1.Post)("billing/cancel"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [typeof (_f = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _f : Object]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "cancel", null);
 __decorate([
@@ -287,7 +288,7 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Headers)("x-razorpay-signature")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_g = typeof common_1.RawBodyRequest !== "undefined" && common_1.RawBodyRequest) === "function" ? _g : Object, String]),
     __metadata("design:returntype", Promise)
 ], BillingController.prototype, "webhook", null);
 __decorate([
@@ -305,7 +306,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, PlanDto]),
+    __metadata("design:paramtypes", [typeof (_h = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _h : Object, String, PlanDto]),
     __metadata("design:returntype", void 0)
 ], BillingController.prototype, "updatePlan", null);
 exports.BillingController = BillingController = __decorate([
@@ -319,4 +320,3 @@ exports.BillingModule = BillingModule;
 exports.BillingModule = BillingModule = __decorate([
     (0, common_1.Module)({ controllers: [BillingController], providers: [BillingService] })
 ], BillingModule);
-//# sourceMappingURL=billing.service.js.map

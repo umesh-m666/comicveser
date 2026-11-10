@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SourcesController = void 0;
 const common_1 = require("@nestjs/common");
@@ -102,7 +103,7 @@ __decorate([
     (0, common_1.Get)("sources/search"),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [sources_dto_1.SearchSourcesQuery]),
+    __metadata("design:paramtypes", [typeof (_b = typeof sources_dto_1.SearchSourcesQuery !== "undefined" && sources_dto_1.SearchSourcesQuery) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "search", null);
 __decorate([
@@ -148,7 +149,7 @@ __decorate([
     __param(1, (0, common_1.Param)("externalId")),
     __param(2, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [String, String, typeof (_c = typeof sources_dto_1.ChaptersQuery !== "undefined" && sources_dto_1.ChaptersQuery) === "function" ? _c : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "chapters", null);
 __decorate([
@@ -158,7 +159,7 @@ __decorate([
     __param(1, (0, common_1.Param)("externalId")),
     __param(2, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [String, String, typeof (_d = typeof sources_dto_1.ChaptersQuery !== "undefined" && sources_dto_1.ChaptersQuery) === "function" ? _d : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "alternatives", null);
 __decorate([
@@ -169,7 +170,7 @@ __decorate([
     __param(2, (0, common_1.Param)("chapterId")),
     __param(3, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, sources_dto_1.PagesQuery]),
+    __metadata("design:paramtypes", [String, String, String, typeof (_e = typeof sources_dto_1.PagesQuery !== "undefined" && sources_dto_1.PagesQuery) === "function" ? _e : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "pages", null);
 __decorate([
@@ -177,7 +178,7 @@ __decorate([
     (0, common_1.Get)("user/external-library"),
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [typeof (_f = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _f : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "library", null);
 __decorate([
@@ -187,7 +188,7 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Param)("externalId")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [typeof (_g = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _g : Object, String, String]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "isSaved", null);
 __decorate([
@@ -198,7 +199,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, sources_dto_1.SaveExternalDto]),
+    __metadata("design:paramtypes", [typeof (_h = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _h : Object, typeof (_j = typeof sources_dto_1.SaveExternalDto !== "undefined" && sources_dto_1.SaveExternalDto) === "function" ? _j : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "save", null);
 __decorate([
@@ -209,7 +210,7 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Param)("externalId")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [typeof (_k = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _k : Object, String, String]),
     __metadata("design:returntype", Promise)
 ], SourcesController.prototype, "remove", null);
 __decorate([
@@ -218,7 +219,7 @@ __decorate([
     (0, common_1.Get)("admin/sources/catalog/search"),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [sources_dto_1.SearchSourcesQuery]),
+    __metadata("design:paramtypes", [typeof (_l = typeof sources_dto_1.SearchSourcesQuery !== "undefined" && sources_dto_1.SearchSourcesQuery) === "function" ? _l : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "catalogSearch", null);
 __decorate([
@@ -237,7 +238,7 @@ __decorate([
     __param(1, (0, common_1.Param)("externalId")),
     __param(2, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [String, String, typeof (_m = typeof sources_dto_1.ChaptersQuery !== "undefined" && sources_dto_1.ChaptersQuery) === "function" ? _m : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "catalogChapters", null);
 __decorate([
@@ -247,7 +248,7 @@ __decorate([
     __param(1, (0, common_1.Param)("externalId")),
     __param(2, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, sources_dto_1.ChaptersQuery]),
+    __metadata("design:paramtypes", [String, String, typeof (_o = typeof sources_dto_1.ChaptersQuery !== "undefined" && sources_dto_1.ChaptersQuery) === "function" ? _o : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "catalogAlternatives", null);
 __decorate([
@@ -256,7 +257,7 @@ __decorate([
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, sources_dto_1.ComicChaptersQuery]),
+    __metadata("design:paramtypes", [String, typeof (_p = typeof sources_dto_1.ComicChaptersQuery !== "undefined" && sources_dto_1.ComicChaptersQuery) === "function" ? _p : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "comicChapters", null);
 __decorate([
@@ -266,7 +267,7 @@ __decorate([
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, sources_dto_1.FallbackCandidatesQuery]),
+    __metadata("design:paramtypes", [String, typeof (_q = typeof sources_dto_1.FallbackCandidatesQuery !== "undefined" && sources_dto_1.FallbackCandidatesQuery) === "function" ? _q : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "fallbackCandidates", null);
 __decorate([
@@ -278,7 +279,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, sources_dto_1.LinkFallbackDto]),
+    __metadata("design:paramtypes", [typeof (_r = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _r : Object, String, typeof (_s = typeof sources_dto_1.LinkFallbackDto !== "undefined" && sources_dto_1.LinkFallbackDto) === "function" ? _s : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "linkFallback", null);
 __decorate([
@@ -289,7 +290,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Param)(SOURCE)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [typeof (_t = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _t : Object, String, String]),
     __metadata("design:returntype", Promise)
 ], SourcesController.prototype, "unlinkFallback", null);
 __decorate([
@@ -301,7 +302,7 @@ __decorate([
     __param(1, (0, common_1.Param)("comicId")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, sources_dto_1.ImportAlternativeChaptersDto]),
+    __metadata("design:paramtypes", [typeof (_u = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _u : Object, String, typeof (_v = typeof sources_dto_1.ImportAlternativeChaptersDto !== "undefined" && sources_dto_1.ImportAlternativeChaptersDto) === "function" ? _v : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "importAlternativeChapters", null);
 __decorate([
@@ -314,7 +315,7 @@ __decorate([
     __param(2, (0, common_1.Param)("externalId")),
     __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, sources_dto_1.SourceTitleActionDto]),
+    __metadata("design:paramtypes", [typeof (_w = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _w : Object, String, String, typeof (_x = typeof sources_dto_1.SourceTitleActionDto !== "undefined" && sources_dto_1.SourceTitleActionDto) === "function" ? _x : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "approve", null);
 __decorate([
@@ -327,7 +328,7 @@ __decorate([
     __param(2, (0, common_1.Param)("externalId")),
     __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, sources_dto_1.SourceTitleActionDto]),
+    __metadata("design:paramtypes", [typeof (_y = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _y : Object, String, String, typeof (_z = typeof sources_dto_1.SourceTitleActionDto !== "undefined" && sources_dto_1.SourceTitleActionDto) === "function" ? _z : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "reject", null);
 __decorate([
@@ -338,7 +339,7 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Param)("externalId")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [typeof (_0 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _0 : Object, String, String]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "unpublish", null);
 __decorate([
@@ -349,7 +350,7 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Param)("externalId")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [typeof (_1 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _1 : Object, String, String]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "republish", null);
 __decorate([
@@ -363,7 +364,7 @@ __decorate([
     __param(3, (0, common_1.Query)()),
     __param(4, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String, sources_dto_1.ChaptersQuery, sources_dto_1.ImportChaptersBodyDto]),
+    __metadata("design:paramtypes", [typeof (_2 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _2 : Object, String, String, typeof (_3 = typeof sources_dto_1.ChaptersQuery !== "undefined" && sources_dto_1.ChaptersQuery) === "function" ? _3 : Object, typeof (_4 = typeof sources_dto_1.ImportChaptersBodyDto !== "undefined" && sources_dto_1.ImportChaptersBodyDto) === "function" ? _4 : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "importChapters", null);
 __decorate([
@@ -406,7 +407,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [typeof (_5 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _5 : Object, Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "triggerSync", null);
 __decorate([
@@ -416,7 +417,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("comicId")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_6 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _6 : Object, String]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "repairComicChapters", null);
 __decorate([
@@ -427,7 +428,7 @@ __decorate([
     __param(1, (0, common_1.Param)(SOURCE)),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, sources_dto_1.UpdateSourceDto]),
+    __metadata("design:paramtypes", [typeof (_7 = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _7 : Object, String, typeof (_8 = typeof sources_dto_1.UpdateSourceDto !== "undefined" && sources_dto_1.UpdateSourceDto) === "function" ? _8 : Object]),
     __metadata("design:returntype", void 0)
 ], SourcesController.prototype, "update", null);
 __decorate([
@@ -443,6 +444,5 @@ __decorate([
 exports.SourcesController = SourcesController = __decorate([
     (0, swagger_1.ApiTags)("sources"),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [sources_service_1.SourcesService])
+    __metadata("design:paramtypes", [typeof (_a = typeof sources_service_1.SourcesService !== "undefined" && sources_service_1.SourcesService) === "function" ? _a : Object])
 ], SourcesController);
-//# sourceMappingURL=sources.controller.js.map

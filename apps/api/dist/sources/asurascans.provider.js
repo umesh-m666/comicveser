@@ -157,4 +157,3 @@ class AsuraScansProvider {
     }
 }
 exports.AsuraScansProvider = AsuraScansProvider;
-//# sourceMappingURL=asurascans.provider.js.map

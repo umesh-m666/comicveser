@@ -484,4 +484,3 @@ function normalizePages(html, chapterId, requestedMangaId) {
         sourceUrl: `${SITE}/chapters/${encodeURIComponent(chapterId)}`,
     };
 }
-//# sourceMappingURL=weebcentral.normalize.js.map

@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GenresModule = exports.GenresController = exports.GenresService = void 0;
 const common_1 = require("@nestjs/common");
@@ -36,7 +37,7 @@ let GenresService = class GenresService {
 exports.GenresService = GenresService;
 exports.GenresService = GenresService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], GenresService);
 let GenresController = class GenresController {
     svc;
@@ -60,7 +61,7 @@ __decorate([
     (0, common_1.Post)("admin/genres"),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [genre_dto_1.GenreDto]),
+    __metadata("design:paramtypes", [typeof (_b = typeof genre_dto_1.GenreDto !== "undefined" && genre_dto_1.GenreDto) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], GenresController.prototype, "create", null);
 __decorate([
@@ -69,7 +70,7 @@ __decorate([
     __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, genre_dto_1.GenreDto]),
+    __metadata("design:paramtypes", [String, typeof (_c = typeof genre_dto_1.GenreDto !== "undefined" && genre_dto_1.GenreDto) === "function" ? _c : Object]),
     __metadata("design:returntype", void 0)
 ], GenresController.prototype, "update", null);
 __decorate([
@@ -92,4 +93,3 @@ exports.GenresModule = GenresModule;
 exports.GenresModule = GenresModule = __decorate([
     (0, common_1.Module)({ controllers: [GenresController], providers: [GenresService] })
 ], GenresModule);
-//# sourceMappingURL=genres.js.map

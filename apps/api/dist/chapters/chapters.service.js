@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChaptersService = void 0;
 const chapter_display_1 = require("../sources/chapter-display");
@@ -174,6 +175,5 @@ let ChaptersService = class ChaptersService {
 exports.ChaptersService = ChaptersService;
 exports.ChaptersService = ChaptersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService, storage_service_1.StorageService, notifications_service_1.NotificationsService, sources_service_1.SourcesService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof storage_service_1.StorageService !== "undefined" && storage_service_1.StorageService) === "function" ? _b : Object, typeof (_c = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _c : Object, typeof (_d = typeof sources_service_1.SourcesService !== "undefined" && sources_service_1.SourcesService) === "function" ? _d : Object])
 ], ChaptersService);
-//# sourceMappingURL=chapters.service.js.map

@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NovelsModule = exports.NovelsController = exports.NovelsService = void 0;
 const common_1 = require("@nestjs/common");
@@ -108,7 +109,7 @@ let NovelsService = class NovelsService {
 exports.NovelsService = NovelsService;
 exports.NovelsService = NovelsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], NovelsService);
 let NovelsController = class NovelsController {
     svc;
@@ -130,7 +131,7 @@ __decorate([
     (0, common_1.Get)("novels"),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [novel_dto_1.NovelListQuery]),
+    __metadata("design:paramtypes", [typeof (_b = typeof novel_dto_1.NovelListQuery !== "undefined" && novel_dto_1.NovelListQuery) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], NovelsController.prototype, "list", null);
 __decorate([
@@ -169,7 +170,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, novel_dto_1.CreateNovelDto]),
+    __metadata("design:paramtypes", [typeof (_c = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _c : Object, typeof (_d = typeof novel_dto_1.CreateNovelDto !== "undefined" && novel_dto_1.CreateNovelDto) === "function" ? _d : Object]),
     __metadata("design:returntype", void 0)
 ], NovelsController.prototype, "create", null);
 __decorate([
@@ -179,7 +180,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, novel_dto_1.UpdateNovelDto]),
+    __metadata("design:paramtypes", [typeof (_e = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _e : Object, String, typeof (_f = typeof novel_dto_1.UpdateNovelDto !== "undefined" && novel_dto_1.UpdateNovelDto) === "function" ? _f : Object]),
     __metadata("design:returntype", void 0)
 ], NovelsController.prototype, "update", null);
 __decorate([
@@ -189,7 +190,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, novel_dto_1.CreateNovelChapterDto]),
+    __metadata("design:paramtypes", [typeof (_g = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _g : Object, String, typeof (_h = typeof novel_dto_1.CreateNovelChapterDto !== "undefined" && novel_dto_1.CreateNovelChapterDto) === "function" ? _h : Object]),
     __metadata("design:returntype", void 0)
 ], NovelsController.prototype, "addChapter", null);
 __decorate([
@@ -199,7 +200,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, novel_dto_1.UpdateNovelChapterDto]),
+    __metadata("design:paramtypes", [typeof (_j = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _j : Object, String, typeof (_k = typeof novel_dto_1.UpdateNovelChapterDto !== "undefined" && novel_dto_1.UpdateNovelChapterDto) === "function" ? _k : Object]),
     __metadata("design:returntype", void 0)
 ], NovelsController.prototype, "updateChapter", null);
 exports.NovelsController = NovelsController = __decorate([
@@ -213,4 +214,3 @@ exports.NovelsModule = NovelsModule;
 exports.NovelsModule = NovelsModule = __decorate([
     (0, common_1.Module)({ controllers: [NovelsController], providers: [NovelsService] })
 ], NovelsModule);
-//# sourceMappingURL=novels.service.js.map

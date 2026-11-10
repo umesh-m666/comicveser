@@ -727,4 +727,3 @@ class ComicKProvider {
     }
 }
 exports.ComicKProvider = ComicKProvider;
-//# sourceMappingURL=comick.provider.js.map

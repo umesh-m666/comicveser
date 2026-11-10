@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MaintenanceModule = exports.MaintenanceService = void 0;
 const common_1 = require("@nestjs/common");
@@ -111,9 +112,7 @@ exports.MaintenanceService = MaintenanceService;
 exports.MaintenanceService = MaintenanceService = __decorate([
     (0, common_1.Injectable)(),
     __param(2, (0, common_1.Optional)()),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        notifications_service_1.NotificationsService,
-        sources_service_1.SourcesService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _b : Object, typeof (_c = typeof sources_service_1.SourcesService !== "undefined" && sources_service_1.SourcesService) === "function" ? _c : Object])
 ], MaintenanceService);
 let MaintenanceModule = class MaintenanceModule {
 };
@@ -125,4 +124,3 @@ exports.MaintenanceModule = MaintenanceModule = __decorate([
         exports: [MaintenanceService],
     })
 ], MaintenanceModule);
-//# sourceMappingURL=maintenance.service.js.map

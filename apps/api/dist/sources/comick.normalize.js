@@ -413,4 +413,3 @@ function normalizeDetails(raw, externalId) {
         availableLanguages,
     };
 }
-//# sourceMappingURL=comick.normalize.js.map

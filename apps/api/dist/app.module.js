@@ -38,4 +38,3 @@ exports.AppModule = AppModule = __decorate([
         providers: [{ provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard }, { provide: core_1.APP_GUARD, useClass: auth_guard_1.OriginGuard }],
     })
 ], AppModule);
-//# sourceMappingURL=app.module.js.map

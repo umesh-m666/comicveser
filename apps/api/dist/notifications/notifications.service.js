@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotificationsModule = exports.NotificationsController = exports.NotificationsService = void 0;
 const common_1 = require("@nestjs/common");
@@ -462,7 +463,7 @@ let NotificationsService = class NotificationsService {
 exports.NotificationsService = NotificationsService;
 exports.NotificationsService = NotificationsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], NotificationsService);
 let NotificationsController = class NotificationsController {
     svc;
@@ -485,7 +486,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, PageQuery]),
+    __metadata("design:paramtypes", [typeof (_b = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _b : Object, PageQuery]),
     __metadata("design:returntype", void 0)
 ], NotificationsController.prototype, "list", null);
 __decorate([
@@ -494,7 +495,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, ReadDto]),
+    __metadata("design:paramtypes", [typeof (_c = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _c : Object, ReadDto]),
     __metadata("design:returntype", void 0)
 ], NotificationsController.prototype, "read", null);
 __decorate([
@@ -503,7 +504,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, SettingsDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _d : Object, SettingsDto]),
     __metadata("design:returntype", void 0)
 ], NotificationsController.prototype, "settings", null);
 exports.NotificationsController = NotificationsController = __decorate([
@@ -523,4 +524,3 @@ exports.NotificationsModule = NotificationsModule = __decorate([
         exports: [NotificationsService],
     })
 ], NotificationsModule);
-//# sourceMappingURL=notifications.service.js.map

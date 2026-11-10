@@ -2,8 +2,6 @@ import "dotenv/config";
 import * as argon2 from "argon2";
 import { PrismaClient } from "@prisma/client";
 
-// Creates the admin account, or repairs/promotes it if it already exists.
-// Run from apps/api: npm run db:create-admin
 const db = new PrismaClient();
 
 async function main() {
@@ -32,28 +30,15 @@ async function main() {
     deletedAt: null,
   };
 
-  // 1. Check by email first so we never collide on the unique email constraint
   const existingByEmail = await db.user.findUnique({ where: { email } });
   const existingByUsername = await db.user.findUnique({ where: { username: "admin" } });
 
   if (existingByEmail) {
-    await db.user.update({
-      where: { id: existingByEmail.id },
-      data,
-    });
+    await db.user.update({ where: { id: existingByEmail.id }, data });
   } else if (existingByUsername) {
-    await db.user.update({
-      where: { id: existingByUsername.id },
-      data,
-    });
+    await db.user.update({ where: { id: existingByUsername.id }, data });
   } else {
-    await db.user.create({
-      data: {
-        username: "admin",
-        ...data,
-        profile: { create: {} },
-      },
-    });
+    await db.user.create({ data: { username: "admin", ...data, profile: { create: {} } } });
   }
 
   console.log(`Admin ready: log in with ${email}`);

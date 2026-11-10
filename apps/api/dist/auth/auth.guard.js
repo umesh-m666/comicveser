@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OriginGuard = exports.SkipOrigin = exports.CurrentUser = exports.RequireAdmin = exports.RequirePermission = exports.Authenticated = exports.AdminRoleGuard = exports.PermissionGuard = exports.SessionGuard = exports.SESSION_COOKIE = void 0;
 exports.extractCandidateTokens = extractCandidateTokens;
@@ -84,7 +85,7 @@ let SessionGuard = class SessionGuard {
 exports.SessionGuard = SessionGuard;
 exports.SessionGuard = SessionGuard = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], SessionGuard);
 let PermissionGuard = class PermissionGuard {
     reflector;
@@ -103,7 +104,7 @@ let PermissionGuard = class PermissionGuard {
 exports.PermissionGuard = PermissionGuard;
 exports.PermissionGuard = PermissionGuard = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [core_1.Reflector])
+    __metadata("design:paramtypes", [typeof (_b = typeof core_1.Reflector !== "undefined" && core_1.Reflector) === "function" ? _b : Object])
 ], PermissionGuard);
 let AdminRoleGuard = class AdminRoleGuard {
     canActivate(ctx) {
@@ -148,6 +149,5 @@ let OriginGuard = class OriginGuard {
 exports.OriginGuard = OriginGuard;
 exports.OriginGuard = OriginGuard = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [core_1.Reflector])
+    __metadata("design:paramtypes", [typeof (_c = typeof core_1.Reflector !== "undefined" && core_1.Reflector) === "function" ? _c : Object])
 ], OriginGuard);
-//# sourceMappingURL=auth.guard.js.map

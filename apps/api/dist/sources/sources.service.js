@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SourcesService = exports.SOURCE_PROVIDERS = exports.SOURCES_CONFIG = void 0;
 const common_1 = require("@nestjs/common");
@@ -1445,7 +1446,7 @@ let SourcesService = class SourcesService {
                     hasMoreChapters: chapterPage.hasMore,
                     requiresFallback: isComick && !chapterSourceMeta,
                 };
-            });
+            }, { maxWait: 15_000, timeout: 60_000 });
             await this.invalidateComicCaches();
             return result;
         }
@@ -1642,7 +1643,7 @@ let SourcesService = class SourcesService {
                 },
             });
             return { count, newlyCreatedIds };
-        });
+        }, { maxWait: 15_000, timeout: 60_000 });
         if (imported.count) {
             await this.invalidateComicCaches();
             for (const chId of imported.newlyCreatedIds) {
@@ -1790,11 +1791,12 @@ let SourcesService = class SourcesService {
             const newChapterTitle = chapterTitle(syntheticItem);
             const needsNumberChange = Math.abs(ch.number - targetNumber) > 0.0001;
             const currentPubTime = ch.publishedAt ? ch.publishedAt.getTime() : null;
+            const scPubTime = sc.publishedAt ? sc.publishedAt.getTime() : null;
             const targetPubTime = resolvedPublishedAt ? resolvedPublishedAt.getTime() : null;
-            const needsMetaChange = sc.numberLabel !== resolvedNumberLabel ||
-                sc.title !== resolvedSubTitle ||
-                (resolvedPublishedAt !== null && sc.publishedAt?.getTime() !== targetPubTime) ||
-                (resolvedPublishedAt !== null && currentPubTime !== targetPubTime) ||
+            const needsMetaChange = (resolvedNumberLabel !== null && sc.numberLabel !== resolvedNumberLabel) ||
+                (resolvedSubTitle !== sc.title && (resolvedSubTitle !== null || sc.title !== null)) ||
+                (targetPubTime !== null && scPubTime !== targetPubTime) ||
+                (targetPubTime !== null && currentPubTime !== targetPubTime) ||
                 ch.title !== newChapterTitle;
             plans.push({
                 chapter: ch,
@@ -1889,14 +1891,37 @@ let SourcesService = class SourcesService {
                 metaOnlyUpdates.push(p);
             }
         }
-        if (safeNumberUpdates.length > 0 || metaOnlyUpdates.length > 0) {
+        const updateSourceChapterSafe = async (client, id, p) => {
+            try {
+                await client.sourceChapter.update({
+                    where: { id },
+                    data: {
+                        numberLabel: p.targetNumberLabel,
+                        originalLabel: p.targetOriginalLabel,
+                        title: p.targetSourceTitle,
+                        ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+                    },
+                });
+            }
+            catch {
+                await client.sourceChapter.update({
+                    where: { id },
+                    data: {
+                        numberLabel: p.targetNumberLabel,
+                        title: p.targetSourceTitle,
+                        ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+                    },
+                });
+            }
+        };
+        if (safeNumberUpdates.length > 0) {
             await this.db.$transaction(async (tx) => {
-                // Phase 1: Move chapters whose numbers are changing to temporary high numbers to avoid transient unique collisions
+                // Phase 1: Move chapters whose numbers are changing to temporary high numbers
                 for (let i = 0; i < safeNumberUpdates.length; i++) {
                     const p = safeNumberUpdates[i];
                     await tx.chapter.update({
                         where: { id: p.chapter.id },
-                        data: { number: 500_000 + i + Math.random() * 0.001 },
+                        data: { number: 500_000 + i + (i + 1) * 0.0001 },
                     });
                 }
                 // Phase 2: Set final target numbers, titles, release dates, and SourceChapter metadata
@@ -1910,33 +1935,20 @@ let SourcesService = class SourcesService {
                         },
                     });
                     if (p.chapter.sourceChapter) {
-                        try {
-                            await tx.sourceChapter.update({
-                                where: { id: p.chapter.sourceChapter.id },
-                                data: {
-                                    numberLabel: p.targetNumberLabel,
-                                    originalLabel: p.targetOriginalLabel,
-                                    title: p.targetSourceTitle,
-                                    ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
-                                },
-                            });
-                        }
-                        catch {
-                            await tx.sourceChapter.update({
-                                where: { id: p.chapter.sourceChapter.id },
-                                data: {
-                                    numberLabel: p.targetNumberLabel,
-                                    title: p.targetSourceTitle,
-                                    ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
-                                },
-                            });
-                        }
+                        await updateSourceChapterSafe(tx, p.chapter.sourceChapter.id, p);
                     }
                     repairedCount++;
                 }
-                // Phase 3: Apply metadata-only updates (labels, titles, release dates)
-                for (const p of metaOnlyUpdates) {
-                    await tx.chapter.update({
+            }, { maxWait: 15_000, timeout: 60_000 });
+        }
+        // Phase 3: Apply metadata-only updates in small batches outside the long interactive transaction
+        // so comics with 200–500 chapters never exceed Prisma's 5,000 ms interactive transaction timeout.
+        if (metaOnlyUpdates.length > 0) {
+            const BATCH = 20;
+            for (let i = 0; i < metaOnlyUpdates.length; i += BATCH) {
+                const slice = metaOnlyUpdates.slice(i, i + BATCH);
+                await Promise.all(slice.map(async (p) => {
+                    await this.db.chapter.update({
                         where: { id: p.chapter.id },
                         data: {
                             title: p.targetChapterTitle,
@@ -1944,41 +1956,25 @@ let SourcesService = class SourcesService {
                         },
                     });
                     if (p.chapter.sourceChapter) {
-                        try {
-                            await tx.sourceChapter.update({
-                                where: { id: p.chapter.sourceChapter.id },
-                                data: {
-                                    numberLabel: p.targetNumberLabel,
-                                    originalLabel: p.targetOriginalLabel,
-                                    title: p.targetSourceTitle,
-                                    ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
-                                },
-                            });
-                        }
-                        catch {
-                            await tx.sourceChapter.update({
-                                where: { id: p.chapter.sourceChapter.id },
-                                data: {
-                                    numberLabel: p.targetNumberLabel,
-                                    title: p.targetSourceTitle,
-                                    ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
-                                },
-                            });
-                        }
+                        await updateSourceChapterSafe(this.db, p.chapter.sourceChapter.id, p);
                     }
                     repairedCount++;
-                }
-                await tx.auditLog.create({
-                    data: {
-                        actorId: actorId ?? null,
-                        actorLabel: actorId ? undefined : "source-repair",
-                        action: "source.comic.repair_chapters",
-                        resource: "Comic",
-                        resourceId: comic.id,
-                        meta: { repairedChapters: repairedCount, conflicts: conflictsCount },
-                    },
-                });
-            });
+                }));
+            }
+        }
+        if (repairedCount > 0) {
+            await this.db.auditLog
+                .create({
+                data: {
+                    actorId: actorId ?? null,
+                    actorLabel: actorId ? undefined : "source-repair",
+                    action: "source.comic.repair_chapters",
+                    resource: "Comic",
+                    resourceId: comic.id,
+                    meta: { repairedChapters: repairedCount, conflicts: conflictsCount },
+                },
+            })
+                .catch(() => undefined);
             await this.invalidateComicCaches();
         }
         return {
@@ -2338,6 +2334,5 @@ exports.SourcesService = SourcesService = __decorate([
     __param(2, (0, common_1.Inject)(exports.SOURCES_CONFIG)),
     __param(3, (0, common_1.Inject)(exports.SOURCE_PROVIDERS)),
     __param(4, (0, common_1.Optional)()),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService, cache_service_1.CacheService, Object, Array, notifications_service_1.NotificationsService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof cache_service_1.CacheService !== "undefined" && cache_service_1.CacheService) === "function" ? _b : Object, Object, Array, typeof (_c = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _c : Object])
 ], SourcesService);
-//# sourceMappingURL=sources.service.js.map

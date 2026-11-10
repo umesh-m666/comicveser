@@ -16,4 +16,3 @@ class SourceError extends Error {
     }
 }
 exports.SourceError = SourceError;
-//# sourceMappingURL=provider.interface.js.map

@@ -42,4 +42,3 @@ function loadSourceSyncConfig(env = process.env) {
         batchSize,
     };
 }
-//# sourceMappingURL=sources.config.js.map

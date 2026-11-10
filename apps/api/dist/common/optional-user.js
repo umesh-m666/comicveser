@@ -10,4 +10,3 @@ async function optionalUserId(db, req) {
     const s = await db.session.findUnique({ where: { tokenHash: (0, crypto_1.sha256)(t) }, select: { userId: true, expiresAt: true } });
     return s && s.expiresAt > new Date() ? s.userId : null;
 }
-//# sourceMappingURL=optional-user.js.map

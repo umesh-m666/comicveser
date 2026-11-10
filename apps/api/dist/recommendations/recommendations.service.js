@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RecommendationsModule = exports.RecommendationsController = exports.RecommendationsService = void 0;
 const common_1 = require("@nestjs/common");
@@ -57,7 +58,7 @@ let RecommendationsService = class RecommendationsService {
 exports.RecommendationsService = RecommendationsService;
 exports.RecommendationsService = RecommendationsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService, comics_service_1.ComicsService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof comics_service_1.ComicsService !== "undefined" && comics_service_1.ComicsService) === "function" ? _b : Object])
 ], RecommendationsService);
 let RecommendationsController = class RecommendationsController {
     svc;
@@ -79,7 +80,7 @@ __decorate([
 exports.RecommendationsController = RecommendationsController = __decorate([
     (0, swagger_1.ApiTags)("recommendations"),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [RecommendationsService, prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [RecommendationsService, typeof (_c = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _c : Object])
 ], RecommendationsController);
 let RecommendationsModule = class RecommendationsModule {
 };
@@ -87,4 +88,3 @@ exports.RecommendationsModule = RecommendationsModule;
 exports.RecommendationsModule = RecommendationsModule = __decorate([
     (0, common_1.Module)({ imports: [comics_module_1.ComicsModule], controllers: [RecommendationsController], providers: [RecommendationsService] })
 ], RecommendationsModule);
-//# sourceMappingURL=recommendations.service.js.map

@@ -81,4 +81,3 @@ function buildAlternativeSourceMatch(altSourceId, sourceName, matchedItem, chRes
         matchedChapter,
     };
 }
-//# sourceMappingURL=alternative.normalize.js.map
