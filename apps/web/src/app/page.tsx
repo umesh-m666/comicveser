@@ -11,41 +11,63 @@ import type { Comic } from "@/lib/comics";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const DEFAULT_ANNOUNCEMENTS = [
-  {
-    id: "ann-1",
-    title: "Faster chapter releases & a new reader — what's new on ComicVerse",
-    date: "NOV 12, 2026",
-  },
-  {
-    id: "ann-2",
-    title: "Series reviews are here — rate and review any comic",
-    date: "NOV 5, 2026",
-  },
-  {
-    id: "ann-3",
-    title: "Bookmarks sync, reading history & dark reader improvements",
-    date: "OCT 28, 2026",
-  },
-];
+function Section({
+  title,
+  subtitle,
+  href,
+  children,
+  className = "mt-12",
+}: {
+  title: string;
+  subtitle?: string;
+  href?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={className}>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="cv-section-title text-xl font-bold text-white md:text-2xl">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-[#A8A1B5]">{subtitle}</p>}
+        </div>
+        {href && (
+          <Link
+            href={href}
+            className="group inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[#C084FC] hover:text-white sm:text-sm"
+          >
+            View all{" "}
+            <ArrowUpRight
+              size={15}
+              className="transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </Link>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default async function Home() {
-  const [comics, weekly, monthly, allTime, announcements] = await Promise.all([
+  const [comics, weekly, monthly, allTime] = await Promise.all([
     allComics(),
     popularComics("weekly"),
     popularComics("monthly"),
     popularComics("all"),
-    getAnnouncements(),
   ]);
 
   const activeComics: Comic[] = comics;
   const byViews = [...activeComics].sort((a, b) => b.views - a.views);
-  const featured = byViews.slice(0, 9);
+  const featured = byViews.slice(0, 7);
   const latest = [...activeComics]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 12);
+    .slice(0, 10);
   const trending = byViews.slice(0, 10);
-  const editorPick = byViews[0] ?? activeComics[0] ?? null;
+  const added = [...activeComics]
+    .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+    .slice(0, 10);
 
   const popular = {
     weekly: weekly.length ? weekly : byViews,
@@ -63,110 +85,70 @@ export default async function Home() {
       : DEFAULT_ANNOUNCEMENTS;
 
   return (
-    <div>
+    <div className="space-y-12">
       <h1 className="sr-only">ComicVerse – Read Manga, Manhwa, Manhua and Webtoons</h1>
 
-      {/* 1. Red Announcement Strip + Hero Cover Rail */}
+      {/* 1. Featured Comic Poster Carousel */}
       {featured.length ? (
-        <FeaturedCarousel comics={featured} announcement={announcements?.[0] ?? null} />
+        <FeaturedCarousel comics={featured} />
       ) : (
-        <div className="wrap pt-6">
-          <EmptyState
-            title="No published comics available yet"
-            body="Approve or publish series from the Admin Panel to feature them on the homepage."
-          />
-        </div>
+        <EmptyState
+          title="No published comics available yet"
+          body="Approve or publish series from the Admin Panel to feature them on the homepage."
+        />
       )}
 
-      {/* 2. Two-Column Asura Home Grid (Left: Trending Comics + Latest Updates | Right: Popular Top 10 + Editor's Pick) */}
-      <div className="wrap">
-        <div className="home-grid">
-          <div>
-            <section className="panel" data-layer="Trending Comics">
-              <div className="panel-h2">
-                <span className="ic" aria-hidden="true">
-                  ★
-                </span>
-                <h2>Trending Comics</h2>
-                <Link href="/browse" className="pillbtn">
-                  All Comics
-                </Link>
-              </div>
-              {trending.length ? (
-                <div className="trend-row" id="trendRow">
-                  {trending.slice(0, 5).map((c, i) => (
-                    <ComicCard key={c.slug} comic={c} priority={i < 5} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState title="Nothing trending yet" />
-              )}
-            </section>
+      {/* 2. Latest Chapter Updates (2-col desktop, 1-col mobile) */}
+      <Section
+        title="Latest Chapter Updates"
+        subtitle="Freshly released chapters from ongoing series"
+        href="/browse?sort=updated"
+      >
+        <LatestUpdates comics={latest} />
+      </Section>
 
-            <section className="panel" data-layer="Latest Updates">
-              <div className="panel-h2">
-                <h2 style={{ fontSize: 19 }}>Latest Updates</h2>
-              </div>
-              <LatestUpdates comics={latest} />
-            </section>
+      {/* 3. Trending Comics (Large Poster Cards) */}
+      <Section
+        title="Trending Comics"
+        subtitle="Most-read series across ComicVerse right now"
+        href="/browse?sort=popular"
+      >
+        {trending.length ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {trending.slice(0, 10).map((c, i) => (
+              <ComicCard key={c.slug} comic={c} priority={i < 5} />
+            ))}
           </div>
+        ) : (
+          <EmptyState title="Nothing trending yet" />
+        )}
+      </Section>
 
-          <aside>
-            <PopularTabs lists={popular} />
+      {/* 4. Popular Comics (Ranked List with Weekly, Monthly, All Time Filters) */}
+      <Section
+        title="Popular Comics"
+        subtitle="Top-ranked series by reader activity"
+        href="/browse?sort=popular"
+      >
+        <PopularTabs lists={popular} />
+      </Section>
 
-            {editorPick && (
-              <Link
-                href={`/comics/${editorPick.slug}`}
-                className="editor-pick"
-                data-layer="Editor's Pick Card"
-              >
-                <Cover
-                  hue={editorPick.hue}
-                  title={editorPick.title}
-                  src={editorPick.coverUrl}
-                  className="h-full w-full rounded-none border-0"
-                />
-                <div className="cap">
-                  <span className="k">EDITOR&apos;S PICK</span>
-                  <h3>{editorPick.title}</h3>
-                  <p>A must-read recommendation from our editorial team</p>
-                </div>
-              </Link>
-            )}
-          </aside>
-        </div>
-
-        {/* 3. Announcements Section */}
-        <section className="panel" data-layer="Announcements" style={{ marginBottom: 6 }}>
-          <div className="panel-h2">
-            <h2>Announcements</h2>
-            <Link href="/profile/notifications" className="pillbtn" style={{ marginLeft: "auto" }}>
-              View All
-            </Link>
+      {/* 5. Recently Added */}
+      <Section
+        title="Recently Added"
+        subtitle="New manga, manhwa, and manhua added to the catalogue"
+        href="/browse?sort=added"
+      >
+        {added.length ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {added.map((c) => (
+              <ComicCard key={c.slug} comic={c} />
+            ))}
           </div>
-          <div className="ann-grid">
-            {annCards.map((a, idx) => {
-              const refComic = activeComics[idx];
-              return (
-                <div key={a.id} className="ann-card">
-                  {refComic?.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={refComic.coverUrl} alt="" referrerPolicy="no-referrer" />
-                  ) : (
-                    <span className="ann-ic" aria-hidden="true">
-                      <ComicVerseMark className="cv-mark-svg" />
-                    </span>
-                  )}
-                  <div>
-                    <h4>{a.title}</h4>
-                    <time>{a.date}</time>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </div>
+        ) : (
+          <EmptyState title="No new series yet" />
+        )}
+      </Section>
     </div>
   );
 }
