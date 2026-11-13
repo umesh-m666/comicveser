@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
+import { BOOKMARK_SORTS, BOOKMARK_STATUSES } from "../bookmark-status";
 export class BookmarkDto { @IsString() @Length(10, 40) comicId: string; }
 export class ProgressDto {
   @IsString() @Length(10, 40) comicId: string;
@@ -14,7 +15,15 @@ export class UpdateProfileDto {
 export class ChangePasswordDto { @IsString() @Length(1, 128) current: string; @IsString() @Length(10, 128) next: string; }
 export class BookmarkQuery {
   @IsOptional() @IsString() @Length(1, 100) q?: string;
-  @IsOptional() @IsString() sort?: "recent" | "title";
+  /** updated = recently updated, added = recently added, title = A-Z ("recent" is the legacy name for added). */
+  @IsOptional() @IsIn(BOOKMARK_SORTS as unknown as string[]) sort?: string;
+  /** One shelf, or omitted / "ALL" for everything. */
+  @IsOptional() @IsIn([...BOOKMARK_STATUSES, "ALL"]) status?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page: number = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(60) limit: number = 24;
+}
+export class BookmarkStatusDto {
+  /** A shelf, or AUTO to go back to the automatic status. */
+  @IsIn([...BOOKMARK_STATUSES, "AUTO"]) status: string;
 }
 export class DeleteAccountDto { @IsString() @Length(1, 128) password: string; }

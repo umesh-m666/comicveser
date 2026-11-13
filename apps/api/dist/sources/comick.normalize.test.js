@@ -209,4 +209,3 @@ const comic = {
     strict_1.default.equal(asuraMatch.matchedChapter?.mangaId, "asura-god-father-99");
     strict_1.default.equal(asuraMatch.matchedChapter?.readerUrl, "/sources/asurascans/asura-god-father-99/read/asura-god-father-99%2Fchapter%2F1?lang=en");
 });
-//# sourceMappingURL=comick.normalize.test.js.map

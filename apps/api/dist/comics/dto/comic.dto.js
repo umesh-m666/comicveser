@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b, _c, _d, _e;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ListComicsQuery = exports.UpdateComicDto = exports.CreateComicDto = void 0;
 const client_1 = require("@prisma/client");
@@ -57,17 +58,17 @@ __decorate([
 ], CreateComicDto.prototype, "artist", void 0);
 __decorate([
     (0, class_validator_1.IsEnum)(client_1.ComicType),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_a = typeof client_1.ComicType !== "undefined" && client_1.ComicType) === "function" ? _a : Object)
 ], CreateComicDto.prototype, "type", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ComicStatus),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_b = typeof client_1.ComicStatus !== "undefined" && client_1.ComicStatus) === "function" ? _b : Object)
 ], CreateComicDto.prototype, "status", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.PublishState),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_c = typeof client_1.PublishState !== "undefined" && client_1.PublishState) === "function" ? _c : Object)
 ], CreateComicDto.prototype, "publishState", void 0);
 __decorate([
     (0, class_validator_1.IsInt)(),
@@ -104,6 +105,8 @@ class ListComicsQuery {
     minRating;
     year;
     sort;
+    creator;
+    minChapters;
     page = 1;
     pageSize = 12;
 }
@@ -117,17 +120,18 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 200),
     __metadata("design:type", String)
 ], ListComicsQuery.prototype, "genre", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ComicType),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_d = typeof client_1.ComicType !== "undefined" && client_1.ComicType) === "function" ? _d : Object)
 ], ListComicsQuery.prototype, "type", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ComicStatus),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_e = typeof client_1.ComicStatus !== "undefined" && client_1.ComicStatus) === "function" ? _e : Object)
 ], ListComicsQuery.prototype, "status", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
@@ -145,9 +149,23 @@ __decorate([
 ], ListComicsQuery.prototype, "year", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsEnum)(["updated", "added", "popular", "alpha"]),
+    (0, class_validator_1.IsEnum)(["updated", "added", "popular", "alpha", "rating", "chapters"]),
     __metadata("design:type", String)
 ], ListComicsQuery.prototype, "sort", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 100),
+    __metadata("design:type", String)
+], ListComicsQuery.prototype, "creator", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(5000),
+    __metadata("design:type", Number)
+], ListComicsQuery.prototype, "minChapters", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
@@ -163,4 +181,3 @@ __decorate([
     (0, class_validator_1.Max)(48),
     __metadata("design:type", Number)
 ], ListComicsQuery.prototype, "pageSize", void 0);
-//# sourceMappingURL=comic.dto.js.map

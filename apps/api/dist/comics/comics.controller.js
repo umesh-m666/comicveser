@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b, _c, _d, _e, _f, _g, _h;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ComicsController = void 0;
 const common_1 = require("@nestjs/common");
@@ -42,7 +43,7 @@ let ComicsController = class ComicsController {
     list(q) { return this.svc.list(q); }
     trending() { return this.svc.trending(); }
     latest() { return this.svc.latest(); }
-    popular() { return this.svc.popular(); }
+    popular(period) { return this.svc.popular(period === "weekly" || period === "monthly" ? period : "all"); }
     chapters(id, order) {
         return this.svc.chapters(id, order === "asc" ? "asc" : "desc");
     }
@@ -58,7 +59,7 @@ __decorate([
     (0, common_1.Get)("comics"),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [comic_dto_1.ListComicsQuery]),
+    __metadata("design:paramtypes", [typeof (_b = typeof comic_dto_1.ListComicsQuery !== "undefined" && comic_dto_1.ListComicsQuery) === "function" ? _b : Object]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "list", null);
 __decorate([
@@ -75,8 +76,9 @@ __decorate([
 ], ComicsController.prototype, "latest", null);
 __decorate([
     (0, common_1.Get)("comics/popular"),
+    __param(0, (0, common_1.Query)("period")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "popular", null);
 __decorate([
@@ -98,7 +100,7 @@ __decorate([
     (0, common_1.Get)("search"),
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [comic_dto_1.ListComicsQuery]),
+    __metadata("design:paramtypes", [typeof (_c = typeof comic_dto_1.ListComicsQuery !== "undefined" && comic_dto_1.ListComicsQuery) === "function" ? _c : Object]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "search", null);
 __decorate([
@@ -116,7 +118,7 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, comic_dto_1.CreateComicDto]),
+    __metadata("design:paramtypes", [typeof (_d = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _d : Object, typeof (_e = typeof comic_dto_1.CreateComicDto !== "undefined" && comic_dto_1.CreateComicDto) === "function" ? _e : Object]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "create", null);
 __decorate([
@@ -126,7 +128,7 @@ __decorate([
     __param(1, (0, common_1.Param)("id")),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, comic_dto_1.UpdateComicDto]),
+    __metadata("design:paramtypes", [typeof (_f = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _f : Object, String, typeof (_g = typeof comic_dto_1.UpdateComicDto !== "undefined" && comic_dto_1.UpdateComicDto) === "function" ? _g : Object]),
     __metadata("design:returntype", void 0)
 ], ComicsController.prototype, "update", null);
 __decorate([
@@ -136,12 +138,11 @@ __decorate([
     __param(0, (0, auth_guard_1.CurrentUser)()),
     __param(1, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [typeof (_h = typeof auth_guard_1.AuthUser !== "undefined" && auth_guard_1.AuthUser) === "function" ? _h : Object, String]),
     __metadata("design:returntype", Promise)
 ], ComicsController.prototype, "remove", null);
 exports.ComicsController = ComicsController = __decorate([
     (0, swagger_1.ApiTags)("comics"),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [comics_service_1.ComicsService])
+    __metadata("design:paramtypes", [typeof (_a = typeof comics_service_1.ComicsService !== "undefined" && comics_service_1.ComicsService) === "function" ? _a : Object])
 ], ComicsController);
-//# sourceMappingURL=comics.controller.js.map

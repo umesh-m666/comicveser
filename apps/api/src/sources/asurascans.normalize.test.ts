@@ -69,3 +69,44 @@ test("normalizes only ordered chapter images from Asura's CDN", () => {
   assert.equal(result.chapterNumber, "12");
   assert.equal(result.sourceUrl, "https://asurascans.com/comics/solo-leveling-ragnarok-ab39de10/chapter/12");
 });
+
+test("PART 3: AsuraScans chapter normalization extracts release dates, keeps missing release dates null, detects duplicates, and orders chapters", () => {
+  const mangaId = "return-of-the-iron-blooded-sword-hound";
+  const html = [
+    `<a href="/comics/${mangaId}/chapter/188"><h3>Chapter 188 - Blood Hound</h3><h3>November 10th 2026</h3></a>`,
+    `<a href="/comics/${mangaId}/chapter/187.5"><span>Chapter 187.5</span><time datetime="2026-11-05T12:00:00Z">Nov 5, 2026</time></a>`,
+    `<a href="/comics/${mangaId}/chapter/187"><span>Chapter 187</span></a>`,
+    `<a href="/comics/${mangaId}/chapter/187-alt"><span>Chapter 187</span><span>2026-11-01</span></a>`,
+  ].join("");
+
+  const result = normalizeChapters(html, mangaId, 1, 50);
+  assert.equal(result.items.length, 4);
+  assert.deepEqual(
+    result.items.map((i) => i.number),
+    [187, 187, 187.5, 188],
+  );
+  // Duplicate detection for Chapter 187
+  assert.equal(result.items[0].duplicateNumber, true);
+  assert.equal(result.items[1].duplicateNumber, true);
+  assert.equal(result.items[2].duplicateNumber, false);
+  assert.equal(result.items[3].duplicateNumber, false);
+
+  // Missing release date stays null (never invented)
+  const ch187NoDate = result.items.find((i) => i.id === "187")!;
+  assert.equal(ch187NoDate.publishedAt, null);
+
+  // Explicit ISO date
+  const ch187Alt = result.items.find((i) => i.id === "187-alt")!;
+  assert.equal(ch187Alt.publishedAt, "2026-11-01T00:00:00.000Z");
+
+  // <time datetime> attribute
+  const ch187Half = result.items.find((i) => i.id === "187.5")!;
+  assert.equal(ch187Half.publishedAt, "2026-11-05T12:00:00.000Z");
+
+  // Human-readable date with ordinal ("November 10th 2026") + subtitle extraction
+  const ch188 = result.items.find((i) => i.id === "188")!;
+  assert.equal(ch188.number, 188);
+  assert.equal(ch188.numberLabel, "188");
+  assert.equal(ch188.title, "Blood Hound");
+  assert.equal(ch188.publishedAt, "2026-11-10T00:00:00.000Z");
+});

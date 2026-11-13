@@ -1,51 +1,52 @@
 services:
-  # ----------------------------------------------------
-  # 1. NestJS Backend API
-  # ----------------------------------------------------
   - type: web
     name: comicverse-api
     runtime: node
     rootDir: apps/api
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm run db:seed && npm run start:prod
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build && node scripts/resolve-migrations.js
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
+      - key: TRUST_PROXY
+        value: "1"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: SOURCES_ENABLED
+        value: "true"
+      - key: SOURCE_SYNC_ENABLED
+        value: "true"
+      - key: SOURCE_SYNC_INTERVAL_MINUTES
+        value: "30"
+      - key: SOURCE_SYNC_BATCH_SIZE
+        value: "20"
+      - key: SOURCES_TIMEOUT_MS
+        value: "10000"
+      - key: MAIL_PROVIDER
+        value: resend
       - key: DATABASE_URL
-        fromDatabase:
-          name: comicverse-db
-          property: connectionString
-      - key: JWT_SECRET
-        generateValue: true
-      - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: comicverse-web
-          property: host
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
 
-  # ----------------------------------------------------
-  # 2. Next.js Frontend Web App
-  # ----------------------------------------------------
   - type: web
     name: comicverse-web
     runtime: node
     rootDir: apps/web
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: comicverse-api
-          property: host
-          # Will resolve to https://<comicverse-api>.onrender.com/api
-
-databases:
-  - name: comicverse-db
-    databaseName: comicverse
-    user: comicverse_user
-    plan: free
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false

@@ -36,4 +36,3 @@ exports.SourcesModule = SourcesModule = __decorate([
         exports: [sources_service_1.SourcesService],
     })
 ], SourcesModule);
-//# sourceMappingURL=sources.module.js.map

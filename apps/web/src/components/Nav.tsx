@@ -76,7 +76,7 @@ export function Header() {
       <div className="relative mx-auto flex min-h-[4.5rem] max-w-7xl items-center gap-2 px-4 md:gap-4">
         <Link href="/" className="flex shrink-0 items-center text-lg font-black tracking-tight text-fg">
           <span className="cv-logo-mark">C</span>
-          Comic<span className="text-primary">Verse</span>
+          <span className="max-[380px]:hidden">Comic<span className="text-[#A855F7]">Verse</span></span>
         </Link>
         <nav aria-label="Main" className="hidden items-center gap-1 text-sm text-muted md:flex">
           {links.map((l) => (
@@ -169,9 +169,9 @@ export function Footer() {
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-9 text-sm text-muted">
         <div><p className="font-bold text-fg">Comic<span className="text-primary">Verse</span></p><p className="mt-1 text-xs">Stories worth staying up for.</p></div>
         <nav aria-label="Footer" className="flex flex-wrap gap-4">
-          {f.map(([l, h]) => <Link key={h} href={h} className="hover:text-fg">{l}</Link>)}
+          {f.map(([l, h]) => <Link key={h} href={h} className="text-[#A8A1B5] hover:text-white">{l}</Link>)}
         </nav>
-        <span className="w-full text-xs text-muted md:w-auto">© 2026 ComicVerse. All series are original or licensed.</span>
+        <span className="w-full text-xs text-[#A8A1B5] md:w-auto">© 2026 ComicVerse. All series are original or licensed.</span>
       </div>
     </footer>
   );

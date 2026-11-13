@@ -70,4 +70,3 @@ function dimensions(b, mime) {
     }
     return w > 0 && h > 0 && w <= 20000 && h <= 60000 ? { width: w, height: h } : null;
 }
-//# sourceMappingURL=image.js.map

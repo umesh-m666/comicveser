@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NovelListQuery = exports.UpdateNovelChapterDto = exports.CreateNovelChapterDto = exports.UpdateNovelDto = exports.CreateNovelDto = void 0;
 const client_1 = require("@prisma/client");
@@ -47,12 +48,12 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.ComicStatus),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_a = typeof client_1.ComicStatus !== "undefined" && client_1.ComicStatus) === "function" ? _a : Object)
 ], CreateNovelDto.prototype, "status", void 0);
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.PublishState),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_b = typeof client_1.PublishState !== "undefined" && client_1.PublishState) === "function" ? _b : Object)
 ], CreateNovelDto.prototype, "publishState", void 0);
 class UpdateNovelDto extends (0, mapped_types_1.PartialType)(CreateNovelDto) {
 }
@@ -83,7 +84,7 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.PublishState),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_c = typeof client_1.PublishState !== "undefined" && client_1.PublishState) === "function" ? _c : Object)
 ], CreateNovelChapterDto.prototype, "publishState", void 0);
 class UpdateNovelChapterDto {
     title;
@@ -106,7 +107,7 @@ __decorate([
 __decorate([
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(client_1.PublishState),
-    __metadata("design:type", String)
+    __metadata("design:type", typeof (_d = typeof client_1.PublishState !== "undefined" && client_1.PublishState) === "function" ? _d : Object)
 ], UpdateNovelChapterDto.prototype, "publishState", void 0);
 class NovelListQuery {
     q;
@@ -126,4 +127,3 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], NovelListQuery.prototype, "page", void 0);
-//# sourceMappingURL=novel.dto.js.map

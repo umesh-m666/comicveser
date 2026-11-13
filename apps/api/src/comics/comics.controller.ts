@@ -15,7 +15,7 @@ export class ComicsController {
   @Get("comics") list(@Query() q: ListComicsQuery) { return this.svc.list(q); }
   @Get("comics/trending") trending() { return this.svc.trending(); }
   @Get("comics/latest") latest() { return this.svc.latest(); }
-  @Get("comics/popular") popular() { return this.svc.popular(); }
+  @Get("comics/popular") popular(@Query("period") period?: string) { return this.svc.popular(period === "weekly" || period === "monthly" ? period : "all"); }
   @Get("comics/:id/chapters") chapters(@Param("id") id: string, @Query("order") order?: "asc" | "desc") {
     return this.svc.chapters(id, order === "asc" ? "asc" : "desc");
   }

@@ -11,10 +11,15 @@ const common_1 = require("@nestjs/common");
 const admin_controller_1 = require("./admin.controller");
 const admin_service_1 = require("./admin.service");
 const storage_service_1 = require("../storage/storage.service");
+const sources_module_1 = require("../sources/sources.module");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
-    (0, common_1.Module)({ controllers: [admin_controller_1.AdminController], providers: [admin_service_1.AdminService, storage_service_1.StorageService], exports: [admin_service_1.AdminService] })
+    (0, common_1.Module)({
+        imports: [sources_module_1.SourcesModule],
+        controllers: [admin_controller_1.AdminController],
+        providers: [admin_service_1.AdminService, storage_service_1.StorageService],
+        exports: [admin_service_1.AdminService],
+    })
 ], AdminModule);
-//# sourceMappingURL=admin.module.js.map

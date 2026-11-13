@@ -4,10 +4,12 @@ exports.contentType = contentType;
 exports.normalizeSummary = normalizeSummary;
 exports.normalizeSearch = normalizeSearch;
 exports.normalizeDetails = normalizeDetails;
+exports.parseAsuraScansChapterMarkup = parseAsuraScansChapterMarkup;
 exports.normalizeChapters = normalizeChapters;
 exports.normalizePages = normalizePages;
 const provider_interface_1 = require("./provider.interface");
 const html_1 = require("./html");
+const weebcentral_normalize_1 = require("./weebcentral.normalize");
 const SITE = "https://asurascans.com";
 const CDN_HOST = "cdn.asurascans.com";
 const obj = (value) => value && typeof value === "object" ? value : {};
@@ -79,17 +81,92 @@ function normalizeDetails(raw) {
     return { ...summary, authors, artists, year: null, availableLanguages: ["en"] };
 }
 function chapterNumber(value) {
-    const match = value.match(/\d+(?:\.\d+)?/);
+    const match = value.match(/^\d+(?:\.\d+)?$/);
     if (!match)
         return null;
     const number = Number.parseFloat(match[0]);
     return Number.isFinite(number) ? number : null;
 }
+/**
+ * Extracts structured chapter release dates from embedded Next.js / JSON script blocks in AsuraScans HTML if present.
+ */
+function extractStructuredChapterDates(html) {
+    const map = new Map();
+    const normalizedHtml = html.replace(/\\"/g, '"');
+    const pattern = /"(?:name|slug|chapter_slug|number)"\s*:\s*"?([a-z0-9.-]+)"?[^{}]{0,260}?"(?:published_at|created_at|released_at|publishedAt)"\s*:\s*"([^"]+)"/gi;
+    for (const m of normalizedHtml.matchAll(pattern)) {
+        const chId = m[1]?.trim();
+        const parsedDate = (0, weebcentral_normalize_1.parseExplicitReleaseDate)(m[2]);
+        if (chId && parsedDate && !map.has(chId)) {
+            map.set(chId, parsedDate);
+        }
+    }
+    return map;
+}
+function parseAsuraScansChapterMarkup(innerHtml, chapterId, surroundingHtml = "", structuredDates) {
+    const publishedAt = (0, weebcentral_normalize_1.extractReleaseDateFromMarkup)(innerHtml) ??
+        (surroundingHtml ? (0, weebcentral_normalize_1.extractReleaseDateFromMarkup)(surroundingHtml) : null) ??
+        structuredDates?.get(chapterId) ??
+        null;
+    const withoutTime = innerHtml
+        .replace(/<time\b[^>]*>[\s\S]*?<\/time>/gi, " ")
+        .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, " ");
+    let text = (0, html_1.htmlText)(withoutTime).trim();
+    // Remove trailing date strings so they never become part of the title or chapter number
+    text = text
+        .replace(/\s*\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?\b\s*$/i, "")
+        .replace(/\s*\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?,?\s+\d{4}\b\s*$/i, "")
+        .replace(/\s*\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?\b\s*$/i, "")
+        .replace(/\s*\b\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago\b\s*$/i, "")
+        .trim();
+    const prefixed = text.match(/^((?:chapter|chap\.?|ch\.?|episode|ep\.?)\s*#?\s*(\d+(?:\.\d+)?))(?:\s*(?:[-–—:·]|\s+)\s*(.+))?$/i);
+    if (prefixed) {
+        const rawOriginal = prefixed[1].trim();
+        const num = Number.parseFloat(prefixed[2]);
+        if (Number.isFinite(num)) {
+            const normalizedStr = String(num);
+            const subtitle = prefixed[3]?.trim() || null;
+            return {
+                number: num,
+                numberLabel: normalizedStr,
+                originalLabel: rawOriginal,
+                title: subtitle,
+                publishedAt,
+            };
+        }
+    }
+    const idNumeric = chapterId.match(/^\d+(?:\.\d+)?$/)?.[0] ?? null;
+    if (idNumeric) {
+        const num = Number.parseFloat(idNumeric);
+        const normalizedStr = String(num);
+        const cleanedTitle = text && !new RegExp(`^(?:chapter|ep\\.?|episode)?\\s*0*${num}$`, "i").test(text) ? text : null;
+        return {
+            number: num,
+            numberLabel: normalizedStr,
+            originalLabel: text || `Chapter ${normalizedStr}`,
+            title: cleanedTitle,
+            publishedAt,
+        };
+    }
+    return {
+        number: null,
+        numberLabel: null,
+        originalLabel: text || null,
+        title: text || null,
+        publishedAt,
+    };
+}
 function getChapterRows(html, mangaId) {
     const expectedPrefix = `/comics/${mangaId}/chapter/`;
     const rows = new Map();
-    for (const anchor of (0, html_1.elements)(html, "a")) {
-        const href = anchor.attrs.href;
+    const structuredDates = extractStructuredChapterDates(html);
+    const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+    const matches = [...html.matchAll(anchorRegex)];
+    for (let i = 0; i < matches.length; i++) {
+        const fullMatch = matches[i];
+        const openAttrs = (0, html_1.attributes)(`<a${fullMatch[1]}>`);
+        const innerHtml = fullMatch[2];
+        const href = openAttrs.href;
         if (!href)
             continue;
         let url;
@@ -104,12 +181,25 @@ function getChapterRows(html, mangaId) {
         const id = url.pathname.slice(expectedPrefix.length).split("/")[0];
         if (!id || !/^[a-z0-9.-]+$/i.test(id))
             continue;
-        const labelText = (0, html_1.htmlText)(anchor.innerHtml);
-        const numberLabel = labelText.match(/chapter\s+([\d.]+)/i)?.[1] ?? id.match(/^\d+(?:\.\d+)?$/)?.[0] ?? null;
+        const endIdx = (fullMatch.index ?? 0) + fullMatch[0].length;
+        const nextStartIdx = i + 1 < matches.length ? (matches[i + 1].index ?? endIdx + 350) : endIdx + 350;
+        const siblingSnippet = html.slice(endIdx, Math.min(nextStartIdx, endIdx + 350));
+        const parsed = parseAsuraScansChapterMarkup(innerHtml, id, siblingSnippet, structuredDates);
         rows.set(id, {
-            id, sourceId: "asurascans", mangaId, number: numberLabel ? chapterNumber(numberLabel) : null,
-            numberLabel, title: null, volume: null, language: "en", publishedAt: null, groups: [],
-            pageCount: null, sourceUrl: url.toString(), duplicateNumber: false,
+            id,
+            sourceId: "asurascans",
+            mangaId,
+            number: parsed.number,
+            numberLabel: parsed.numberLabel,
+            originalLabel: parsed.originalLabel,
+            title: parsed.title,
+            volume: null,
+            language: "en",
+            publishedAt: parsed.publishedAt,
+            groups: [],
+            pageCount: null,
+            sourceUrl: url.toString(),
+            duplicateNumber: false,
         });
     }
     const items = [...rows.values()].sort((a, b) => (a.number === null ? 1 : 0) - (b.number === null ? 1 : 0)
@@ -171,4 +261,3 @@ function positiveInt(value) {
     const parsed = Number.parseInt(value ?? "", 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-//# sourceMappingURL=asurascans.normalize.js.map

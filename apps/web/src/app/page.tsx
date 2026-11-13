@@ -6,10 +6,25 @@ import { allComics, getAnnouncements, latestChapter } from "@/lib/comics";
 
 function Section({ title, href, children, eyebrow }: { title: string; href?: string; children: React.ReactNode; eyebrow?: string }) {
   return (
-    <section className="mt-14">
-      <div className="mb-5 flex items-end justify-between gap-3">
-        <div><p className="cv-eyebrow mb-1">{eyebrow ?? "Curated for you"}</p><h2 className="cv-section-title text-xl font-extrabold md:text-2xl">{title}</h2></div>
-        {href && <Link href={href} className="group flex items-center gap-1 text-sm font-semibold text-primary hover:text-fg">Explore all <ArrowUpRight size={15} className="transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></Link>}
+    <section className={className}>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="cv-section-title text-xl font-bold text-white md:text-2xl">{title}</h2>
+          {subtitle && <p className="mt-0.5 text-xs text-[#A8A1B5]">{subtitle}</p>}
+        </div>
+        {href && (
+          <Link
+            href={href}
+            className="group inline-flex shrink-0 items-center gap-1 text-xs font-bold text-[#C084FC] hover:text-white sm:text-sm"
+          >
+            View all{" "}
+            <ArrowUpRight
+              size={15}
+              className="transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+              aria-hidden
+            />
+          </Link>
+        )}
       </div>
       {children}
     </section>

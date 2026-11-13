@@ -5,13 +5,36 @@ exports.htmlText = htmlText;
 exports.metaContent = metaContent;
 exports.elements = elements;
 exports.voidElements = voidElements;
+const NAMED_ENTITIES = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+};
+const TAG_PATTERNS = {
+    a: /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi,
+    article: /<article\b([^>]*)>([\s\S]*?)<\/article\s*>/gi,
+    div: /<div\b([^>]*)>([\s\S]*?)<\/div\s*>/gi,
+    h1: /<h1\b([^>]*)>([\s\S]*?)<\/h1\s*>/gi,
+    h2: /<h2\b([^>]*)>([\s\S]*?)<\/h2\s*>/gi,
+    h3: /<h3\b([^>]*)>([\s\S]*?)<\/h3\s*>/gi,
+    li: /<li\b([^>]*)>([\s\S]*?)<\/li\s*>/gi,
+    p: /<p\b([^>]*)>([\s\S]*?)<\/p\s*>/gi,
+    span: /<span\b([^>]*)>([\s\S]*?)<\/span\s*>/gi,
+    strong: /<strong\b([^>]*)>([\s\S]*?)<\/strong\s*>/gi,
+    time: /<time\b([^>]*)>([\s\S]*?)<\/time\s*>/gi,
+};
+const VOID_TAG_PATTERNS = {
+    img: /<img\b[^>]*>/gi,
+    meta: /<meta\b[^>]*>/gi,
+    source: /<source\b[^>]*>/gi,
+};
 function decodeHtml(value) {
-    const named = {
-        amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ", quot: "\"",
-    };
-    return value.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code) => {
+    return value.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (entity, code) => {
         if (code[0] !== "#")
-            return named[code.toLowerCase()] ?? entity;
+            return NAMED_ENTITIES[code.toLowerCase()] ?? entity;
         const hex = code[1]?.toLowerCase() === "x";
         const point = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
         return Number.isFinite(point) && point >= 0 && point <= 0x10ffff
@@ -31,31 +54,36 @@ function attributes(tag) {
 function htmlText(value) {
     return decodeHtml(value
         .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
-        .replace(/<[^>]*>/g, " ")
-        .replace(/\s+/g, " "))
-        .trim();
+        .replace(/<[^>]{0,2000}>/g, " ")
+        .replace(/\s+/g, " ")).trim();
 }
 function metaContent(html, key, value) {
-    for (const match of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const targetKey = key.toLowerCase();
+    const targetVal = value.toLowerCase();
+    for (const match of html.matchAll(VOID_TAG_PATTERNS.meta)) {
         const attrs = attributes(match[0]);
-        if (attrs[key]?.toLowerCase() === value.toLowerCase())
+        if (attrs[targetKey]?.toLowerCase() === targetVal)
             return attrs.content || null;
     }
     return null;
 }
 function elements(html, name) {
+    const pattern = TAG_PATTERNS[name.toLowerCase()];
+    if (!pattern)
+        return [];
     const result = [];
-    const pattern = new RegExp(`<${name}\\b([^>]*)>([\\s\\S]*?)<\\/${name}\\s*>`, "gi");
     for (const match of html.matchAll(pattern)) {
         result.push({ attrs: attributes(`<${name}${match[1]}>`), innerHtml: match[2] });
     }
     return result;
 }
 function voidElements(html, name) {
+    const pattern = VOID_TAG_PATTERNS[name.toLowerCase()];
+    if (!pattern)
+        return [];
     const result = [];
-    const pattern = new RegExp(`<${name}\\b[^>]*>`, "gi");
-    for (const match of html.matchAll(pattern))
+    for (const match of html.matchAll(pattern)) {
         result.push(attributes(match[0]));
+    }
     return result;
 }
-//# sourceMappingURL=html.js.map

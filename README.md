@@ -1,66 +1,147 @@
-# ComicVerse
+# ComicVerse — Full-Stack Manga, Manhwa, Manhua & Novel Platform
 
-Original digital comics platform (manga, manhwa, manhua, webtoon, novels).
-Monorepo: `apps/web` (Next.js) now; `apps/api` (NestJS + Prisma + PostgreSQL) arrives in Phase 2.
+ComicVerse is a production-ready reading and catalogue platform built with **NestJS 10 + Prisma + PostgreSQL** (`apps/api`) and **Next.js 14 App Router + Tailwind CSS** (`apps/web`).
 
-Only fictional sample content is used. No third-party code, logos or artwork are copied.
+---
 
-## Run Phase 1
+## Key Features & Production Architecture
+
+1. **Cross-Origin Production Authentication & Session Persistence**:
+   - Supports both **HTTP-only cookies** (`cv_session`, automatically configured with `SameSite=None; Secure` on cross-site HTTPS deployments such as Render or Vercel) and **`Authorization: Bearer <token>`** fallback headers so sessions remain persistent across page reloads even under strict third-party cookie blocking.
+   - Multi-origin CORS and CSRF `OriginGuard` via comma-separated `WEB_ORIGIN`.
+2. **Google OAuth 2.0 Sign-In & Account Linking**:
+   - "Continue with Google" on `/login` and `/register` powered by Google Identity Services (`GET /api/auth/config`, `POST /api/auth/google`).
+   - Cryptographic RS256 ID token verification against Google's JWKS (`GOOGLE_CLIENT_ID`).
+   - Automatically links existing accounts by verified email while strictly preserving `ADMIN`, `CREATOR`, and `USER` roles and permissions (and registers new Google accounts with the `USER` role).
+3. **Resend Transactional Email Integration**:
+   - Full HTML + plain-text email templates for Email Verification, Forgot Password, Password Changed Confirmation, Sign-In Alerts, Account Notices, and Admin Issue Report Alerts (`MAIL_PROVIDER=resend`, `RESEND_API_KEY`, `MAIL_FROM`).
+   - Validates Resend `{ data, error }` responses and records delivery diagnostics for the Admin Dashboard without exposing secrets.
+4. **External Source Providers (ComicK, WeebCentral & Asura Scans)**:
+   - Supports `PRIMARY` and `CHAPTER_FALLBACK` (`SourceTitleRole`) relationships per comic.
+   - Normalizes all WeebCentral chapter and episode naming formats (`Chapter 1`, `Chapter 12`, `Chapter 12.5`, `Chapter 001`, `Episode 1`, `Episode 12`, `Episode 12.5`, `Episode 001`, `Ep. 12`, `Ch. 12`, `12`, `12.5`, and `Special Extra`) without misclassifying special chapters or `<time>` dates.
+   - Collision-safe chapter numbering (`allocateUniqueChapterNumber`) and automatic stale fallback cleanup so publishing/importing series with duplicate chapter releases or re-imported comics never fails with `P2002`.
+5. **User Issue Reporting → Admin Messages & Alerts**:
+   - Readers can submit categorized issue reports (`BROKEN_CHAPTER`, `CONTENT_ISSUE`, `BUG`, `LOGIN_ISSUE`, `ABUSE`, `FEATURE_REQUEST`, `GENERAL`) from any comic/chapter or from **Profile → Messages (`/profile/notifications`)**.
+   - Admins receive immediate unread alerts on the **Admin Dashboard (`/admin`)** and can filter, search, respond to, resolve, or dismiss reports in **Admin → Issue Reports & Reviews (`/admin/reviews`)**.
+   - Readers receive an in-app notification (and email when configured) when an admin responds to or resolves their report.
+
+---
+
+## Local Development Setup
+
+### 1. Start PostgreSQL (and optional Redis / MinIO)
+```bash
+docker compose up -d
+```
+
+### 2. Configure Environment Variables
+Copy the example environment files:
+```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+```
+
+### 3. Install Dependencies, Run Migrations & Seed
+```bash
+cd apps/api
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run prisma:seed
+npm run dev
+```
+In a second terminal, start the Next.js frontend:
 ```bash
 cd apps/web
 npm install
-npm run dev     # http://localhost:3000
-npm run build   # production build check
-npm run typecheck
+npm run dev
 ```
-Requires Node 20+. Phase 1 reads from `src/lib/comics.ts`, a data-access layer backed by fictional sample data; Phase 2 replaces its internals with the REST API without touching pages.
 
-See `docs/ARCHITECTURE.md` for architecture and the full checklist.
+Default seeded accounts (from `apps/api/prisma/seed.ts`):
+- **Admin**: `admin@comicverse.local` / `AdminPass123!`
+- **Creator**: `creator@comicverse.local` / `CreatorPass123!`
+- **Reader**: `reader@comicverse.local` / `ReaderPass123!`
 
-## Run the API (Phase 2)
+---
+
+## Production Deployment (Render / Vercel / Railway)
+
+### Backend (`apps/api`)
+- **Root Directory**: `apps/api`
+- **Build Command**:
+  ```bash
+  npm install --include=dev && npx prisma generate && npm run build && node scripts/resolve-migrations.js
+  ```
+- **Start Command**:
+  ```bash
+  npm run start:prod
+  ```
+- **Required Environment Variables (`apps/api`)**:
+  | Variable | Example / Value | Description |
+  | --- | --- | --- |
+  | `NODE_ENV` | `production` | Enables production security & HTTPS cookies |
+  | `DATABASE_URL` | `postgresql://...` | PostgreSQL connection string |
+  | `WEB_ORIGIN` | `https://your-frontend.onrender.com` | Comma-separated allowed frontend origin(s) |
+  | `TRUST_PROXY` | `1` | Trusts Render/Cloudflare reverse proxy headers |
+  | `COOKIE_SAMESITE` | `none` | Required when frontend & API are on separate domains |
+  | `COOKIE_DOMAIN` | *(leave empty unless sharing custom parent domain)* | Optional cookie domain |
+  | `GOOGLE_CLIENT_ID` | `123456-abc.apps.googleusercontent.com` | Google OAuth 2.0 Web Client ID |
+  | `MAIL_PROVIDER` | `resend` | Enables Resend email delivery |
+  | `RESEND_API_KEY` | `re_xxxxxxxxx` | Resend API key |
+  | `MAIL_FROM` | `ComicVerse <noreply@yourdomain.com>` | Verified Resend sender address |
+  | `SOURCES_ENABLED` | `true` | Enables WeebCentral, Asura Scans & ComicK |
+  | `SOURCES_TIMEOUT_MS` | `10000` | Upstream provider request timeout in ms |
+
+### Frontend (`apps/web`)
+- **Root Directory**: `apps/web`
+- **Build Command**:
+  ```bash
+  npm install --include=dev && npm run build
+  ```
+- **Start Command**:
+  ```bash
+  npm run start
+  ```
+- **Required Environment Variables (`apps/web`)**:
+  | Variable | Example / Value | Description |
+  | --- | --- | --- |
+  | `NEXT_PUBLIC_API_URL` | `https://your-api.onrender.com/api` | Public URL of the ComicVerse API (`/api` suffix) |
+  | `NEXT_PUBLIC_SITE_URL` | `https://your-frontend.onrender.com` | Public URL of the frontend |
+  | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `123456-abc.apps.googleusercontent.com` | Google OAuth 2.0 Web Client ID |
+
+---
+
+## Running Automated Tests
+
 ```bash
-docker compose up -d                # Postgres + Redis
-cd apps/api && cp .env.example .env # set ADMIN_API_KEY (16+ chars)
-npm install
-npx prisma migrate dev --name init  # creates tables
-npm run db:seed
-npm run start:dev                   # http://localhost:4000/api, docs at /api/docs
+cd apps/api
+npm run build
+npm test
 ```
-Set `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` in `.env` before `db:seed` to create the first admin, then `POST /api/auth/login`. In dev, verification and reset links are printed in the API console. Run `npx prisma migrate dev --name auth` after pulling Phase 3 (new Session/AuthToken tables).
 
-## Phase 4 setup
-- Web: `apps/web/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:4000/api`; run API and web together.
-- Storage: fill the `S3_*` vars. The bucket needs a CORS rule allowing `PUT` from your web origin, otherwise browser uploads fail.
-- Production cookies: serve web and API on the same registrable domain (e.g. `app.example.com` and `api.example.com`) so the SameSite=Lax session cookie is sent.
-- Upload flow: `POST /api/admin/chapters` -> `POST /api/admin/uploads` (get signed URL) -> `PUT` file to it -> `POST /api/admin/chapters/:id/images` -> `PUT /api/admin/chapters/:id` with `{"publishState":"PUBLISHED"}`.
 
-## Phase 6 setup
-Schema changed (review votes, notification links). From `apps/api` run `npm install` then `npx prisma migrate dev --name phase6`.
-Creator flow: user applies at `/creator/dashboard` -> admin approves at `/admin/creators` -> creator submits a comic (PENDING) and chapters -> admin publishes from `/admin/comics` and `/admin/chapters`.
+## Automatic Chapter Synchronization & Render Deployment
 
-## Phase 7 setup
-From `apps/api`: `npm install`, then `npx prisma migrate dev --name phase7` (Payment gets order/plan fields; new AnalyticsEvent table), then restart.
-Payments stay off until `.env` has `PAYMENTS_ENABLED=true` plus Razorpay **test** keys. In the Razorpay dashboard add a webhook to `https://<public-url>/api/billing/webhook` with the secret in `RAZORPAY_WEBHOOK_SECRET` and events `payment.captured`, `payment.failed`, `refund.processed`. For local work expose port 4000 with a tunnel such as ngrok.
-Analytics only records after a visitor accepts the banner.
+ComicVerse automatically detects and publishes new chapters released on **WeebCentral** and **AsuraScans** for approved, published comics, repairs existing chapter numbers and release dates, sends admin-only operational alerts, and notifies readers who bookmarked the series.
 
-## Testing (Phase 8)
-**Unit tests** (no database needed): `cd apps/api && npm install && npm test`.
+### Synchronization Environment Variables (`apps/api`)
 
-**API integration tests** (use a throwaway database; they refuse any database whose name lacks "test"):
-```bash
-createdb comicverse_test            # or CREATE DATABASE comicverse_test OWNER comicverse; in psql
-cd apps/api && cp .env.test.example .env.test
-npx dotenv-cli -e .env.test -- npx prisma migrate deploy   # or set DATABASE_URL in your shell and run: npx prisma migrate deploy
-npm run test:e2e
-```
-**Browser tests** (Playwright):
-```bash
-cd apps/api && npm run seed:e2e && npm run build && node dist/main.js    # with .env.test values loaded (CDN_BASE_URL=http://e2e.invalid)
-cd apps/web && npm install && npm run test:e2e:install && npm run test:e2e
-```
-The reader test replaces page images with a 1x1 PNG, so no storage is needed. The upload test runs only with `E2E_S3=1`.
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `SOURCES_ENABLED` | `true` | Enables external comic providers (WeebCentral & AsuraScans). |
+| `SOURCE_SYNC_ENABLED` | `true` | Enables background automatic chapter detection & publishing. |
+| `SOURCE_SYNC_INTERVAL_MINUTES` | `30` | Polling frequency in minutes for background synchronization. |
+| `SOURCE_SYNC_BATCH_SIZE` | `20` | Maximum number of approved source titles checked per sync cycle. |
 
-Security notes: `docs/SECURITY.md`. Deployment: `docs/DEPLOYMENT.md`.
+### Deploying to Render
 
-## External sources (WeebCentral, Asura Scans, and ComicK)
-Optional and off by default. Administrators can search the enabled catalogs, review titles, and approve publication; chapter images are loaded from provider URLs and are not stored by ComicVerse. Full setup, source limitations, authorization requirements, and tests are documented in `docs/EXTERNAL-SOURCES.md`.
+1. Push the updated repository to your connected GitHub branch (`main`).
+2. In your **Render Dashboard → `comicverse-api` → Environment**, ensure the following variables are set:
+   - `DATABASE_URL` (PostgreSQL connection string)
+   - `WEB_ORIGIN` (Your frontend URL, e.g. `https://comicverse-web.onrender.com`)
+   - `SOURCES_ENABLED=true`
+   - `SOURCE_SYNC_ENABLED=true`
+   - `SOURCE_SYNC_INTERVAL_MINUTES=30`
+   - `SOURCE_SYNC_BATCH_SIZE=20`
+3. Render automatically runs `npx prisma migrate deploy` (via `prestart:prod` / `render:build`) to apply the additive migration `20261112000000_auto_chapter_sync_and_admin_alerts` without resetting or deleting any existing data.
+4. Multiple Render API instances coordinate safely using PostgreSQL advisory locks (`pg_try_advisory_lock`) and transactional idempotency so chapters and notifications are never duplicated.

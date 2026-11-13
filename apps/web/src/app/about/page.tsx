@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "About" };
 export default function About() {
   return (
     <StaticPage title={`About ${SITE.name}`}>
-      <p>{SITE.name} is a place to read manga, manhwa, manhua, webtoons and novels. Every series on the site is either original work published by its creator or licensed for distribution here.</p>
+      <p>{SITE.name} is a place to read manga, manhwa, manhua, and webtoons. Every series on the site is either original work published by its creator or licensed for distribution here.</p>
       <h2>For readers</h2>
       <p>Bookmark series, pick up where you left off on any device, rate and review what you read, and get a notification when a bookmarked series has a new chapter. <Link href="/browse">Browse the catalog</Link>.</p>
       <h2>For creators</h2>

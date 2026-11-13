@@ -21,12 +21,14 @@ export class UpdateComicDto extends PartialType(CreateComicDto) {}
 
 export class ListComicsQuery {
   @IsOptional() @IsString() @Length(1, 100) q?: string;
-  @IsOptional() @IsString() genre?: string;
+  @IsOptional() @IsString() @Length(1, 200) genre?: string;
   @IsOptional() @IsEnum(ComicType) type?: ComicType;
   @IsOptional() @IsEnum(ComicStatus) status?: ComicStatus;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(1) @Max(10) minRating?: number;
   @IsOptional() @Type(() => Number) @IsInt() year?: number;
-  @IsOptional() @IsEnum(["updated", "added", "popular", "alpha"]) sort?: "updated" | "added" | "popular" | "alpha";
+  @IsOptional() @IsEnum(["updated", "added", "popular", "alpha", "rating", "chapters"]) sort?: "updated" | "added" | "popular" | "alpha" | "rating" | "chapters";
+  @IsOptional() @IsString() @Length(1, 100) creator?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(5000) minChapters?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page: number = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(48) pageSize: number = 12;
 }

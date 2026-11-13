@@ -23,11 +23,18 @@ async function main() {
 
   if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
     const role = await db.role.findUniqueOrThrow({ where: { name: "ADMIN" } });
-    await db.user.upsert({
-      where: { email: process.env.SEED_ADMIN_EMAIL.toLowerCase() }, update: {},
-      create: { username: "admin", email: process.env.SEED_ADMIN_EMAIL.toLowerCase(), emailVerifiedAt: new Date(), roleId: role.id,
-        passwordHash: await argon2.hash(process.env.SEED_ADMIN_PASSWORD, { type: argon2.argon2id }) },
-    });
+    const adminEmail = process.env.SEED_ADMIN_EMAIL.trim().toLowerCase();
+    const passwordHash = await argon2.hash(process.env.SEED_ADMIN_PASSWORD, { type: argon2.argon2id });
+    const existingByEmail = await db.user.findUnique({ where: { email: adminEmail } });
+    const existingAdminName = await db.user.findUnique({ where: { username: "admin" } });
+    if (existingByEmail) {
+      await db.user.update({ where: { id: existingByEmail.id }, data: { roleId: role.id, passwordHash, emailVerifiedAt: new Date(), status: "ACTIVE" } });
+    } else {
+      const username = existingAdminName ? `admin_${Date.now().toString(36)}` : "admin";
+      await db.user.create({
+        data: { username, email: adminEmail, emailVerifiedAt: new Date(), roleId: role.id, passwordHash, profile: { create: {} } },
+      });
+    }
   }
   for (const name of GENRES) await db.genre.upsert({ where: { slug: slugify(name) }, update: {}, create: { name, slug: slugify(name) } });
 

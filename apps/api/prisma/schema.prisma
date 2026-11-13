@@ -34,6 +34,11 @@ enum SourceTitleState {
   UNPUBLISHED
 }
 
+enum SourceTitleRole {
+  PRIMARY
+  CHAPTER_FALLBACK
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -50,6 +55,14 @@ enum ReportStatus {
   OPEN
   RESOLVED
   DISMISSED
+}
+
+enum BookmarkStatus {
+  READING
+  COMPLETED
+  PLAN_TO_READ
+  ON_HOLD
+  DROPPED
 }
 
 enum NotificationType {
@@ -98,6 +111,8 @@ model User {
   username             String                 @unique
   email                String                 @unique
   passwordHash         String
+  googleId             String?                @unique
+  authProvider         String                 @default("local")
   emailVerifiedAt      DateTime?
   status               UserStatus             @default(ACTIVE)
   roleId               String
@@ -106,6 +121,7 @@ model User {
   creator              Creator?
   bookmarks            Bookmark[]
   history              ReadingHistory[]
+  chapterReads         ChapterRead[]
   ratings              Rating[]
   reviews              Review[]
   comments             Comment[]
@@ -153,12 +169,13 @@ model Comic {
   genres           ComicGenre[]
   bookmarks        Bookmark[]
   history          ReadingHistory[]
+  chapterReads     ChapterRead[]
   ratings          Rating[]
   reviews          Review[]
   comments         Comment[]
   creators         CreatorComic[]
   licenses         ContentLicense[]
-  sourceTitle      SourceTitle?
+  sourceTitles     SourceTitle[]
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   deletedAt        DateTime?
@@ -180,6 +197,7 @@ model Chapter {
   images        ChapterImage[]
   sourceChapter SourceChapter?
   history       ReadingHistory[]
+  reads         ChapterRead[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?
@@ -220,14 +238,34 @@ model ComicGenre {
 }
 
 model Bookmark {
+  id        String          @id @default(cuid())
+  userId    String
+  comicId   String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comic     Comic           @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  /// Manual shelf chosen by the reader. NULL means "automatic": derived from reading progress (see user/bookmark-status.ts).
+  status    BookmarkStatus?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @default(now()) @updatedAt
+
+  @@unique([userId, comicId])
+  @@index([userId, status])
+}
+
+/// One row per chapter a reader has finished. Drives the persistent read/unread colours and bookmark progress.
+model ChapterRead {
   id        String   @id @default(cuid())
   userId    String
   comicId   String
+  chapterId String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   comic     Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  readAt    DateTime @default(now())
 
-  @@unique([userId, comicId])
+  @@unique([userId, chapterId])
+  @@index([userId, comicId])
+  @@index([userId, readAt])
 }
 
 model ReadingHistory {
@@ -295,6 +333,7 @@ model Notification {
   title     String
   body      String
   href      String?
+  meta      Json?
   readAt    DateTime?
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime         @default(now())
@@ -354,17 +393,28 @@ model ContentLicense {
 }
 
 model Report {
-  id         String       @id @default(cuid())
-  reporterId String
-  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  targetType String
-  targetId   String
-  reason     String
-  status     ReportStatus @default(OPEN)
-  createdAt  DateTime     @default(now())
-  resolvedAt DateTime?
+  id            String       @id @default(cuid())
+  reporterId    String
+  reporter      User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType    String
+  targetId      String
+  category      String       @default("GENERAL")
+  subject       String       @default("")
+  description   String       @default("")
+  reason        String
+  comicId       String?
+  chapterId     String?
+  status        ReportStatus @default(OPEN)
+  isRead        Boolean      @default(false)
+  adminResponse String?
+  respondedAt   DateTime?
+  respondedById String?
+  createdAt     DateTime     @default(now())
+  resolvedAt    DateTime?
 
   @@index([status, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([isRead, status, createdAt])
 }
 
 model AuditLog {
@@ -529,7 +579,7 @@ model ExternalLibraryEntry {
   @@index([sourceId, externalId])
 }
 
-// An external title becomes a Comic only after an administrator approves it.
+// A Comic can have a PRIMARY SourceTitle (e.g. ComicK) and CHAPTER_FALLBACK SourceTitles (WeebCentral, Asura Scans).
 model SourceTitle {
   id           String           @id @default(cuid())
   sourceId     String
@@ -539,17 +589,22 @@ model SourceTitle {
   coverUrl     String?
   contentType  String
   state        SourceTitleState
-  comicId      String?          @unique
+  role         SourceTitleRole  @default(PRIMARY)
+  comicId      String?
   comic        Comic?           @relation(fields: [comicId], references: [id], onDelete: SetNull)
   reviewedById String?
   reviewedBy   User?            @relation("SourceTitleReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt   DateTime?
-  reviewNote   String?
-  chapters     SourceChapter[]
+  reviewNote     String?
+  lastSyncedAt   DateTime?
+  lastSyncStatus String?
+  lastSyncError  String?
+  chapters       SourceChapter[]
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
   @@unique([sourceId, externalId])
+  @@unique([comicId, sourceId])
   @@index([state, updatedAt])
 }
 
@@ -562,6 +617,7 @@ model SourceChapter {
   chapter       Chapter     @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   externalId    String
   numberLabel   String?
+  originalLabel String?
   title         String?
   volume        String?
   sourceUrl     String

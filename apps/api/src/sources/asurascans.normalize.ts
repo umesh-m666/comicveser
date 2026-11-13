@@ -1,6 +1,7 @@
 import type { ChapterItem, ChapterPages, ChaptersResponse, ContentType, MangaDetails, MangaSummary, SearchQuery, SearchResponse } from "./provider.interface";
 import { SourceError } from "./provider.interface";
 import { attributes, elements, htmlText } from "./html";
+import { extractReleaseDateFromMarkup, parseExplicitReleaseDate } from "./weebcentral.normalize";
 
 const SITE = "https://asurascans.com";
 const CDN_HOST = "cdn.asurascans.com";
@@ -73,29 +74,145 @@ export function normalizeDetails(raw: unknown): MangaDetails {
 }
 
 function chapterNumber(value: string): number | null {
-  const match = value.match(/\d+(?:\.\d+)?/);
+  const match = value.match(/^\d+(?:\.\d+)?$/);
   if (!match) return null;
   const number = Number.parseFloat(match[0]);
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Extracts structured chapter release dates from embedded Next.js / JSON script blocks in AsuraScans HTML if present.
+ */
+function extractStructuredChapterDates(html: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const normalizedHtml = html.replace(/\\"/g, '"');
+  const pattern = /"(?:name|slug|chapter_slug|number)"\s*:\s*"?([a-z0-9.-]+)"?[^{}]{0,260}?"(?:published_at|created_at|released_at|publishedAt)"\s*:\s*"([^"]+)"/gi;
+  for (const m of normalizedHtml.matchAll(pattern)) {
+    const chId = m[1]?.trim();
+    const parsedDate = parseExplicitReleaseDate(m[2]);
+    if (chId && parsedDate && !map.has(chId)) {
+      map.set(chId, parsedDate);
+    }
+  }
+  return map;
+}
+
+export function parseAsuraScansChapterMarkup(
+  innerHtml: string,
+  chapterId: string,
+  surroundingHtml = "",
+  structuredDates?: Map<string, string>,
+): {
+  number: number | null;
+  numberLabel: string | null;
+  originalLabel: string | null;
+  title: string | null;
+  publishedAt: string | null;
+} {
+  const publishedAt =
+    extractReleaseDateFromMarkup(innerHtml) ??
+    (surroundingHtml ? extractReleaseDateFromMarkup(surroundingHtml) : null) ??
+    structuredDates?.get(chapterId) ??
+    null;
+
+  const withoutTime = innerHtml
+    .replace(/<time\b[^>]*>[\s\S]*?<\/time>/gi, " ")
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, " ");
+
+  let text = htmlText(withoutTime).trim();
+  // Remove trailing date strings so they never become part of the title or chapter number
+  text = text
+    .replace(
+      /\s*\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}(?:\s+\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)?\b\s*$/i,
+      "",
+    )
+    .replace(
+      /\s*\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?,?\s+\d{4}\b\s*$/i,
+      "",
+    )
+    .replace(/\s*\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?\b\s*$/i, "")
+    .replace(/\s*\b\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago\b\s*$/i, "")
+    .trim();
+
+  const prefixed = text.match(/^((?:chapter|chap\.?|ch\.?|episode|ep\.?)\s*#?\s*(\d+(?:\.\d+)?))(?:\s*(?:[-–—:·]|\s+)\s*(.+))?$/i);
+  if (prefixed) {
+    const rawOriginal = prefixed[1].trim();
+    const num = Number.parseFloat(prefixed[2]);
+    if (Number.isFinite(num)) {
+      const normalizedStr = String(num);
+      const subtitle = prefixed[3]?.trim() || null;
+      return {
+        number: num,
+        numberLabel: normalizedStr,
+        originalLabel: rawOriginal,
+        title: subtitle,
+        publishedAt,
+      };
+    }
+  }
+
+  const idNumeric = chapterId.match(/^\d+(?:\.\d+)?$/)?.[0] ?? null;
+  if (idNumeric) {
+    const num = Number.parseFloat(idNumeric);
+    const normalizedStr = String(num);
+    const cleanedTitle = text && !new RegExp(`^(?:chapter|ep\\.?|episode)?\\s*0*${num}$`, "i").test(text) ? text : null;
+    return {
+      number: num,
+      numberLabel: normalizedStr,
+      originalLabel: text || `Chapter ${normalizedStr}`,
+      title: cleanedTitle,
+      publishedAt,
+    };
+  }
+
+  return {
+    number: null,
+    numberLabel: null,
+    originalLabel: text || null,
+    title: text || null,
+    publishedAt,
+  };
+}
+
 function getChapterRows(html: string, mangaId: string): ChapterItem[] {
   const expectedPrefix = `/comics/${mangaId}/chapter/`;
   const rows = new Map<string, ChapterItem>();
-  for (const anchor of elements(html, "a")) {
-    const href = anchor.attrs.href;
+  const structuredDates = extractStructuredChapterDates(html);
+  const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+  const matches = [...html.matchAll(anchorRegex)];
+
+  for (let i = 0; i < matches.length; i++) {
+    const fullMatch = matches[i];
+    const openAttrs = attributes(`<a${fullMatch[1]}>`);
+    const innerHtml = fullMatch[2];
+    const href = openAttrs.href;
     if (!href) continue;
     let url: URL;
     try { url = new URL(href, SITE); } catch { continue; }
     if (url.protocol !== "https:" || url.hostname !== "asurascans.com" || !url.pathname.startsWith(expectedPrefix)) continue;
     const id = url.pathname.slice(expectedPrefix.length).split("/")[0];
     if (!id || !/^[a-z0-9.-]+$/i.test(id)) continue;
-    const labelText = htmlText(anchor.innerHtml);
-    const numberLabel = labelText.match(/chapter\s+([\d.]+)/i)?.[1] ?? id.match(/^\d+(?:\.\d+)?$/)?.[0] ?? null;
+
+    const endIdx = (fullMatch.index ?? 0) + fullMatch[0].length;
+    const nextStartIdx = i + 1 < matches.length ? (matches[i + 1].index ?? endIdx + 350) : endIdx + 350;
+    const siblingSnippet = html.slice(endIdx, Math.min(nextStartIdx, endIdx + 350));
+
+    const parsed = parseAsuraScansChapterMarkup(innerHtml, id, siblingSnippet, structuredDates);
     rows.set(id, {
-      id, sourceId: "asurascans", mangaId, number: numberLabel ? chapterNumber(numberLabel) : null,
-      numberLabel, title: null, volume: null, language: "en", publishedAt: null, groups: [],
-      pageCount: null, sourceUrl: url.toString(), duplicateNumber: false,
+      id,
+      sourceId: "asurascans",
+      mangaId,
+      number: parsed.number,
+      numberLabel: parsed.numberLabel,
+      originalLabel: parsed.originalLabel,
+      title: parsed.title,
+      volume: null,
+      language: "en",
+      publishedAt: parsed.publishedAt,
+      groups: [],
+      pageCount: null,
+      sourceUrl: url.toString(),
+      duplicateNumber: false,
     });
   }
   const items = [...rows.values()].sort((a, b) =>

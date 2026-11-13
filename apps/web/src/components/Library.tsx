@@ -6,6 +6,8 @@ import { Cover } from "./ComicCard";
 import { ActivityRow, type ActivityItem } from "./ProfileActivity";
 import { dayLabel } from "./ProfileStats";
 import { ApiError, api } from "@/lib/api";
+import { timeAgo } from "@/lib/comics";
+import { hueOf } from "@/lib/media";
 
 interface Row {
   slug: string; title: string; sub: string; href: string; cta: string;
@@ -192,7 +194,7 @@ export default function Library({ kind }: { kind: "bookmarks" | "history" }) {
         }).catch(() => {});
       }
     }).catch((e) => setState(e instanceof ApiError && e.status === 401 ? "anon" : "error"));
-  }, [kind]);
+  }, []);
 
   // History only: removing an entry hides it on this device. There is no
   // delete-history endpoint in the API, so nothing is removed server-side.
@@ -215,13 +217,8 @@ export default function Library({ kind }: { kind: "bookmarks" | "history" }) {
 
   return (
     <div>
-      <nav aria-label="Library" className="mb-6 flex gap-4 text-sm">
-        <Link href="/profile/bookmarks" className={kind === "bookmarks" ? "font-semibold" : "text-muted"}>Bookmarks</Link>
-        <Link href="/profile/history" className={kind === "history" ? "font-semibold" : "text-muted"}>History</Link>
-        <Link href="/profile/reviews" className="text-muted">Reviews</Link>
-        <Link href="/profile/notifications" className="text-muted">Alerts</Link>
-        <Link href="/profile/settings" className="text-muted">Settings</Link>
-      </nav>
+      <ProfileNav active="/profile/history" />
+      <h1 className="mb-4 text-2xl font-extrabold text-white">Reading history</h1>
       {state === "loading" && <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="skeleton h-20" />)}</div>}
       {state === "anon" && <p>Please <Link href="/login" className="text-primary">log in</Link> to see your {kind}.</p>}
       {state === "error" && <p className="text-danger">We couldn't load your {kind}. Refresh to try again.</p>}

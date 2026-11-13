@@ -17,4 +17,3 @@ exports.ComicsModule = ComicsModule;
 exports.ComicsModule = ComicsModule = __decorate([
     (0, common_1.Module)({ controllers: [comics_controller_1.ComicsController], providers: [comics_service_1.ComicsService, storage_service_1.StorageService], exports: [comics_service_1.ComicsService] })
 ], ComicsModule);
-//# sourceMappingURL=comics.module.js.map

@@ -7,6 +7,7 @@ import ProfileNav from "@/components/ProfileNav";
 import { ProfileAvatar } from "@/components/ProfileStats";
 import { State, btn, btnDanger, btnGhost, input } from "@/components/admin/ui";
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 import { act, errMsg, useLoad } from "@/lib/useApi";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

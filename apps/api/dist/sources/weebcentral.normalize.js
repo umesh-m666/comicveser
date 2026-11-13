@@ -2,6 +2,9 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.normalizeSearch = normalizeSearch;
 exports.normalizeDetails = normalizeDetails;
+exports.parseExplicitReleaseDate = parseExplicitReleaseDate;
+exports.extractReleaseDateFromMarkup = extractReleaseDateFromMarkup;
+exports.parseWeebCentralChapterLabel = parseWeebCentralChapterLabel;
 exports.normalizeChapters = normalizeChapters;
 exports.normalizePages = normalizePages;
 const provider_interface_1 = require("./provider.interface");
@@ -29,7 +32,11 @@ function sourceIdFromUrl(value) {
 function coverFrom(html) {
     const source = (0, html_1.voidElements)(html, "source").find((item) => item.srcset);
     const image = (0, html_1.voidElements)(html, "img").find((item) => item.src);
-    const value = source?.srcset?.split(",")[0]?.trim().split(/\s+/)[0] ?? image?.src ?? image?.["data-src"] ?? image?.["data-original"] ?? null;
+    const value = source?.srcset?.split(",")[0]?.trim().split(/\s+/)[0] ??
+        image?.src ??
+        image?.["data-src"] ??
+        image?.["data-original"] ??
+        null;
     return safeUrl(value, SITE);
 }
 function normalizedContentType(value) {
@@ -43,14 +50,10 @@ function normalizedContentType(value) {
     return "unknown";
 }
 function contentTypeFrom(markup) {
-    // WeebCentral's catalogue cards expose the type as a labelled value or
-    // inside an element whose class contains "type". Keep this parsing
-    // tolerant of small markup changes on the upstream site.
     const typeLabel = markup.match(/<strong[^>]*>\s*type\s*<\/strong>\s*<span[^>]*>([\s\S]*?)<\/span>/i)?.[1];
     if (typeLabel)
         return normalizedContentType((0, html_1.htmlText)(typeLabel));
-    const typedElement = [...(0, html_1.elements)(markup, "span"), ...(0, html_1.elements)(markup, "div"), ...(0, html_1.elements)(markup, "p")]
-        .find((element) => /type/i.test(element.attrs.class ?? ""));
+    const typedElement = [...(0, html_1.elements)(markup, "span"), ...(0, html_1.elements)(markup, "div"), ...(0, html_1.elements)(markup, "p")].find((element) => /type/i.test(element.attrs.class ?? ""));
     if (typedElement) {
         const parsed = normalizedContentType((0, html_1.htmlText)(typedElement.innerHtml));
         if (parsed !== "unknown")
@@ -66,16 +69,26 @@ function summaryFromLink(href, title, html, cardType) {
     if (!id || !sourceUrl)
         return null;
     const image = (0, html_1.voidElements)(html, "img")[0];
-    const resolvedTitle = (0, html_1.htmlText)(title) || (0, html_1.htmlText)(image?.alt ?? "");
+    const rawTitle = (0, html_1.htmlText)(title) || (0, html_1.htmlText)(image?.alt ?? "");
+    const resolvedTitle = rawTitle.replace(/^Official\s+/i, "").trim() || rawTitle;
     if (!resolvedTitle)
         return null;
     const type = normalizedContentType(cardType ?? "") !== "unknown"
         ? normalizedContentType(cardType ?? "")
         : contentTypeFrom(html);
     return {
-        id, externalId: id, sourceId: "weebcentral", title: resolvedTitle, alternativeTitles: [],
-        coverUrl: coverFrom(html), description: null, status: null, genres: [],
-        contentType: type, language: "en", sourceUrl,
+        id,
+        externalId: id,
+        sourceId: "weebcentral",
+        title: resolvedTitle,
+        alternativeTitles: [],
+        coverUrl: coverFrom(html),
+        description: null,
+        status: null,
+        genres: [],
+        contentType: type,
+        language: "en",
+        sourceUrl,
     };
 }
 function seriesAnchor(markup) {
@@ -103,23 +116,20 @@ function normalizeSearch(html, query) {
         }
     }
     else {
-        // The advanced search page renders each result as a list item or article.
-        // Extract the series link from its containing card so type and cover data
-        // outside the anchor are still available to the normalizer.
         const cards = [...(0, html_1.elements)(html, "li"), ...(0, html_1.elements)(html, "article")];
         for (const card of cards) {
             const anchor = seriesAnchor(card.innerHtml);
             if (!anchor?.attrs.href)
                 continue;
             const image = (0, html_1.voidElements)(card.innerHtml, "img")[0];
-            const tip = card.attrs["data-tip"] ?? card.attrs["data-tooltip"]
-                ?? card.innerHtml.match(/data-tip\s*=\\s*["']([^"']+)["']/i)?.[1]
-                ?? card.innerHtml.match(/data-tooltip\s*=\\s*["']([^"']+)["']/i)?.[1]
-                ?? "";
+            const tip = card.attrs["data-tip"] ??
+                card.attrs["data-tooltip"] ??
+                card.innerHtml.match(/data-tip\s*=\s*["']([^"']+)["']/i)?.[1] ??
+                card.innerHtml.match(/data-tooltip\s*=\s*["']([^"']+)["']/i)?.[1] ??
+                "";
             const imageTitle = (image?.alt ?? "").replace(/\s*cover\s*$/i, "").trim();
             add(anchor.attrs.href, imageTitle || (0, html_1.htmlText)(anchor.innerHtml), card.innerHtml, tip);
         }
-        // A fallback for upstream markup that no longer uses li/article cards.
         if (!found.length) {
             for (const anchor of (0, html_1.elements)(html, "a")) {
                 if (anchor.attrs.href)
@@ -127,7 +137,9 @@ function normalizeSearch(html, query) {
             }
         }
     }
-    if (!isQuickSearch && !found.length && /captcha|cloudflare|just a moment|verify you are human|access denied/i.test(html)) {
+    if (!isQuickSearch &&
+        !found.length &&
+        /captcha|cloudflare|just a moment|verify you are human|access denied/i.test(html)) {
         throw new provider_interface_1.SourceError("SOURCE_UNAVAILABLE", "WeebCentral is showing an access-check page instead of its catalogue. Try again later.");
     }
     const page = Math.max(query.page, 1);
@@ -136,8 +148,6 @@ function normalizeSearch(html, query) {
     const items = typed.slice(0, limit);
     if (isQuickSearch)
         return { items, total: typed.length, page, limit, hasMore: false };
-    // WeebCentral's HTML catalogue does not provide a stable total count.
-    // Treat a full page as a possible next page and expose a lower-bound count.
     const hasMore = found.length >= limit;
     const offset = (page - 1) * limit;
     return {
@@ -153,45 +163,262 @@ function detailsTitle(html) {
     const ogTitle = (0, html_1.metaContent)(html, "property", "og:title");
     if (ogTitle)
         return (0, html_1.htmlText)(ogTitle.replace(/\s*\|\s*Weeb Central\s*$/i, ""));
-    return (0, html_1.elements)(html, "h1").map((element) => (0, html_1.htmlText)(element.innerHtml)).find(Boolean) ?? null;
+    return ((0, html_1.elements)(html, "h1")
+        .map((element) => (0, html_1.htmlText)(element.innerHtml))
+        .find(Boolean) ?? null);
 }
 function normalizeDetails(html, externalId) {
     const title = detailsTitle(html);
     if (!title)
         throw new provider_interface_1.SourceError("BAD_RESPONSE", "WeebCentral returned a title we could not read.");
     const description = (0, html_1.metaContent)(html, "property", "og:description");
-    const sourceUrl = safeUrl((0, html_1.metaContent)(html, "property", "og:url"), SITE)
-        ?? `${SITE}/series/${encodeURIComponent(externalId)}`;
-    const coverUrl = safeUrl((0, html_1.metaContent)(html, "property", "og:image"), SITE);
+    const sourceUrl = safeUrl((0, html_1.metaContent)(html, "property", "og:url"), SITE) ??
+        `${SITE}/series/${encodeURIComponent(externalId)}`;
+    const coverUrl = safeUrl((0, html_1.metaContent)(html, "property", "og:image"), SITE) ?? coverFrom(html);
     const detectedType = contentTypeFrom(html);
     const summary = {
-        id: externalId, externalId, sourceId: "weebcentral", title, alternativeTitles: [],
-        coverUrl, description: description ? (0, html_1.htmlText)(description) : null, status: null, genres: [],
-        // Retain the old Manga fallback only when WeebCentral omits its type label.
+        id: externalId,
+        externalId,
+        sourceId: "weebcentral",
+        title,
+        alternativeTitles: [],
+        coverUrl,
+        description: description ? (0, html_1.htmlText)(description) : null,
+        status: null,
+        genres: [],
         contentType: detectedType === "unknown" ? "manga" : detectedType,
-        language: "en", sourceUrl,
+        language: "en",
+        sourceUrl,
     };
     return { ...summary, authors: [], artists: [], year: null, availableLanguages: ["en"] };
 }
-function chapterNumber(value) {
-    const match = value.match(/(?:chapter\s*)?(\d+(?:\.\d+)?)/i);
-    if (!match)
+const MONTH_MAP = {
+    jan: 0, january: 0,
+    feb: 1, february: 1,
+    mar: 2, march: 2,
+    apr: 3, april: 3,
+    may: 4,
+    jun: 5, june: 5,
+    jul: 6, july: 6,
+    aug: 7, august: 7,
+    sep: 8, sept: 8, september: 8,
+    oct: 9, october: 9,
+    nov: 10, november: 10,
+    dec: 11, december: 11,
+};
+/**
+ * Parses an explicit date/timestamp string into a UTC ISO-8601 string without inventing dates.
+ * Returns null if the string is not a valid date or is a relative phrase ("3 days ago").
+ */
+function parseExplicitReleaseDate(raw) {
+    if (!raw)
         return null;
-    const number = Number.parseFloat(match[1]);
-    return Number.isFinite(number) ? number : null;
+    const cleaned = raw.trim();
+    if (!cleaned || /\bago\b|yesterday|today|just now/i.test(cleaned))
+        return null;
+    // 1. ISO-8601 date or timestamp (e.g. "2025-05-10", "2025-05-10T12:00:00Z", "2026-11-10 14:30:00")
+    const isoMatch = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/);
+    if (isoMatch) {
+        const normalizedIso = isoMatch[4]
+            ? `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}:${isoMatch[6] ?? "00"}${isoMatch[7] ?? "Z"}`
+            : `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T00:00:00.000Z`;
+        const d = new Date(normalizedIso);
+        if (!Number.isNaN(d.getTime()))
+            return d.toISOString();
+    }
+    // 2. Month Day, Year (e.g. "May 10, 2025", "November 10th 2026", "Nov. 10, 2026")
+    const mdyMatch = cleaned.match(/^([A-Za-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i);
+    if (mdyMatch) {
+        const monthIdx = MONTH_MAP[mdyMatch[1].toLowerCase()];
+        const day = Number.parseInt(mdyMatch[2], 10);
+        const year = Number.parseInt(mdyMatch[3], 10);
+        if (monthIdx !== undefined && day >= 1 && day <= 31 && year >= 1970 && year <= 2100) {
+            let hour = mdyMatch[4] ? Number.parseInt(mdyMatch[4], 10) : 0;
+            const minute = mdyMatch[5] ? Number.parseInt(mdyMatch[5], 10) : 0;
+            const ampm = mdyMatch[6]?.toUpperCase();
+            if (ampm === "PM" && hour < 12)
+                hour += 12;
+            if (ampm === "AM" && hour === 12)
+                hour = 0;
+            const d = new Date(Date.UTC(year, monthIdx, day, hour, minute, 0));
+            if (!Number.isNaN(d.getTime()))
+                return d.toISOString();
+        }
+    }
+    // 3. Day Month Year (e.g. "10 November 2026", "10th Nov 2026")
+    const dmyMatch = cleaned.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?,?\s+(\d{4})(?:\s+(\d{1,2}):(\d{2})(?:\s*(AM|PM))?)?$/i);
+    if (dmyMatch) {
+        const day = Number.parseInt(dmyMatch[1], 10);
+        const monthIdx = MONTH_MAP[dmyMatch[2].toLowerCase()];
+        const year = Number.parseInt(dmyMatch[3], 10);
+        if (monthIdx !== undefined && day >= 1 && day <= 31 && year >= 1970 && year <= 2100) {
+            let hour = dmyMatch[4] ? Number.parseInt(dmyMatch[4], 10) : 0;
+            const minute = dmyMatch[5] ? Number.parseInt(dmyMatch[5], 10) : 0;
+            const ampm = dmyMatch[6]?.toUpperCase();
+            if (ampm === "PM" && hour < 12)
+                hour += 12;
+            if (ampm === "AM" && hour === 12)
+                hour = 0;
+            const d = new Date(Date.UTC(year, monthIdx, day, hour, minute, 0));
+            if (!Number.isNaN(d.getTime()))
+                return d.toISOString();
+        }
+    }
+    const fallback = new Date(cleaned);
+    if (!Number.isNaN(fallback.getTime()) && fallback.getUTCFullYear() >= 1990 && fallback.getUTCFullYear() <= 2100) {
+        return fallback.toISOString();
+    }
+    return null;
+}
+function extractReleaseDateFromMarkup(markup) {
+    // 1. <time datetime="..."> or data-datetime / data-date / data-released
+    const attrPatterns = [
+        /<time[^>]*\bdatetime\s*=\s*["']([^"']+)["'][^>]*>/i,
+        /\bdata-(?:date)?time\s*=\s*["']([^"']+)["']/i,
+        /\bdata-released(?:-at)?\s*=\s*["']([^"']+)["']/i,
+    ];
+    for (const pat of attrPatterns) {
+        const m = markup.match(pat);
+        if (m?.[1]) {
+            const parsed = parseExplicitReleaseDate(m[1]);
+            if (parsed)
+                return parsed;
+        }
+    }
+    // 2. Inner text of <time>...</time>
+    for (const timeEl of (0, html_1.elements)(markup, "time")) {
+        const dtAttr = timeEl.attrs.datetime || timeEl.attrs["data-datetime"];
+        if (dtAttr) {
+            const parsed = parseExplicitReleaseDate(dtAttr);
+            if (parsed)
+                return parsed;
+        }
+        const inner = (0, html_1.htmlText)(timeEl.innerHtml);
+        const parsedInner = parseExplicitReleaseDate(inner);
+        if (parsedInner)
+            return parsedInner;
+    }
+    // 3. Inline date string in markup text
+    const plain = (0, html_1.htmlText)(markup);
+    const inlineDateMatch = plain.match(/\b((?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4})\b/i) ??
+        plain.match(/\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?,?\s+\d{4})\b/i) ??
+        plain.match(/\b(\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?)\b/);
+    if (inlineDateMatch?.[1]) {
+        return parseExplicitReleaseDate(inlineDateMatch[1]);
+    }
+    return null;
+}
+/**
+ * Extracts normalized chapter or episode numbers from WeebCentral anchor markup or text.
+ * Supports:
+ *  - Episode 1, Episode 10, Episode 10.5, Episode 100, Episode 001
+ *  - Ep. 10, Ep 10, Ep.10
+ *  - Chapter 1, Chapter 10, Chapter 10.5, Chapter 001
+ *  - Ch. 10, Ch 10, Ch.10, Chap. 10, Chap 10
+ *  - 10, 10.5, 001
+ *  - Genuine specials: Prologue, Special Extra, Side Story -> number: null, numberLabel: null
+ * Avoids extracting unrelated numbers from chapter titles or release dates.
+ */
+function parseWeebCentralChapterLabel(rawMarkupOrText, surroundingContextHtml) {
+    const publishedAt = extractReleaseDateFromMarkup(rawMarkupOrText) ??
+        (surroundingContextHtml ? extractReleaseDateFromMarkup(surroundingContextHtml) : null);
+    // Strip <time> and <svg> blocks before converting HTML to text so dates never pollute chapter labels
+    const withoutTimeAndIcons = rawMarkupOrText
+        .replace(/<time\b[^>]*>[\s\S]*?<\/time>/gi, " ")
+        .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, " ");
+    // Check if leaf <span> elements separate the primary label (e.g. "Episode 10") from a subtitle
+    const leafSpanTexts = [];
+    for (const m of withoutTimeAndIcons.matchAll(/<span\b[^>]*>([^<]+)<\/span>/gi)) {
+        const t = (0, html_1.htmlText)(m[1]).trim();
+        if (t && !/^(?:new|hot|up|last\s*read|read)$/i.test(t) && !parseExplicitReleaseDate(t)) {
+            leafSpanTexts.push(t);
+        }
+    }
+    let text = (0, html_1.htmlText)(withoutTimeAndIcons).trim();
+    // Strip trailing inline dates (e.g. "May 10, 2025", "10 November 2026", "2025-05-10", "3 days ago")
+    text = text
+        .replace(/\s+\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}\b\s*$/i, "")
+        .replace(/\s+\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?,?\s+\d{4}\b\s*$/i, "")
+        .replace(/\s+\b\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?\b\s*$/i, "")
+        .replace(/\s+\b\d+\s+(?:seconds?|minutes?|hours?|days?|weeks?|months?|years?)\s+ago\b\s*$/i, "")
+        .trim();
+    if (!text) {
+        return { number: null, numberLabel: null, originalLabel: null, title: null, publishedAt };
+    }
+    // If multiple leaf spans exist and the first leaf span is an explicit label (e.g. "Episode 10"),
+    // join it with ": " so the subtitle in subsequent spans is cleanly separated.
+    if (leafSpanTexts.length >= 2) {
+        const firstSpan = leafSpanTexts[0];
+        if (/^(?:(?:vol(?:ume)?|season|s|part|pt)\.?\s*\d+\s*[-–—:·]?\s*)?(?:chapter|chap\.?|ch\.?|episode|ep\.?|#)?\s*\d+(?:\.\d+)?$/i.test(firstSpan)) {
+            const restSubtitle = leafSpanTexts.slice(1).join(" - ").trim();
+            text = restSubtitle ? `${firstSpan}: ${restSubtitle}` : firstSpan;
+        }
+    }
+    // 1. Explicit Chapter / Episode / Ch. / Ep. prefix (with optional Vol. / Season / Part prefix)
+    const prefixedMatch = text.match(/^((?:(?:vol(?:ume)?|season|s|part|pt)\.?\s*\d+\s*[-–—:·]?\s*)?(?:chapter|chap\.?|ch\.?|episode|ep\.?)\s*#?\s*(\d+(?:\.\d+)?))(?:\s*(?:[-–—:·]|\s+)\s*(.+))?$/i);
+    if (prefixedMatch) {
+        const rawOriginalPrefix = prefixedMatch[1].trim();
+        const num = Number.parseFloat(prefixedMatch[2]);
+        if (Number.isFinite(num)) {
+            const normalizedStr = String(num);
+            const rawSubtitle = prefixedMatch[3]?.trim() || null;
+            const subtitle = rawSubtitle && !/^(?:new|up|hot)$/i.test(rawSubtitle) ? rawSubtitle : null;
+            return {
+                number: num,
+                numberLabel: normalizedStr,
+                originalLabel: rawOriginalPrefix,
+                title: subtitle,
+                publishedAt,
+            };
+        }
+    }
+    // 2. Pure numeric label (e.g. "10", "10.5", "001") or numeric label with ": Subtitle" / "- Subtitle"
+    const bareNumericMatch = text.match(/^(#?\s*(\d+(?:\.\d+)?))(?:\s*[-–—:]\s*(.+))?$/);
+    if (bareNumericMatch) {
+        const rawOriginalNumeric = bareNumericMatch[1].trim();
+        const num = Number.parseFloat(bareNumericMatch[2]);
+        if (Number.isFinite(num)) {
+            const normalizedStr = String(num);
+            const subtitle = bareNumericMatch[3]?.trim() || null;
+            return {
+                number: num,
+                numberLabel: normalizedStr,
+                originalLabel: rawOriginalNumeric,
+                title: subtitle,
+                publishedAt,
+            };
+        }
+    }
+    // 3. Genuine Special Chapter (e.g. "Prologue", "Special Extra", "Side Story", "Special Extra: Room 302")
+    return {
+        number: null,
+        numberLabel: null,
+        originalLabel: text,
+        title: text,
+        publishedAt,
+    };
 }
 function duplicateNumbers(items) {
     const counts = new Map();
-    for (const item of items)
+    for (const item of items) {
         if (item.numberLabel)
             counts.set(item.numberLabel, (counts.get(item.numberLabel) ?? 0) + 1);
-    for (const item of items)
+    }
+    for (const item of items) {
         item.duplicateNumber = !!item.numberLabel && (counts.get(item.numberLabel) ?? 0) > 1;
+    }
 }
 function normalizeChapters(html, mangaId, page, limit) {
     const all = new Map();
-    for (const anchor of (0, html_1.elements)(html, "a")) {
-        const href = safeUrl(anchor.attrs.href ?? null, SITE);
+    const anchorRegex = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+    const matches = [...html.matchAll(anchorRegex)];
+    for (let i = 0; i < matches.length; i++) {
+        const fullMatch = matches[i];
+        const openTag = `<a${fullMatch[1]}>`;
+        const innerHtml = fullMatch[2];
+        const hrefMatch = openTag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+        const rawHref = hrefMatch?.[1] ?? hrefMatch?.[2] ?? hrefMatch?.[3] ?? null;
+        const href = safeUrl(rawHref, SITE);
         if (!href || new URL(href).hostname !== new URL(SITE).hostname)
             continue;
         const url = new URL(href);
@@ -199,39 +426,61 @@ function normalizeChapters(html, mangaId, page, limit) {
         if (!match)
             continue;
         const id = match[1].toUpperCase();
-        const label = (0, html_1.htmlText)(anchor.innerHtml);
-        const numberLabel = label.match(/chapter\s+([\d.]+)/i)?.[1] ?? null;
+        // Capture sibling markup between this </a> and the next <a (capped at 400 chars) in case <time> is outside <a>
+        const endIdx = (fullMatch.index ?? 0) + fullMatch[0].length;
+        const nextStartIdx = i + 1 < matches.length ? (matches[i + 1].index ?? endIdx + 400) : endIdx + 400;
+        const siblingSnippet = html.slice(endIdx, Math.min(nextStartIdx, endIdx + 400));
+        const parsed = parseWeebCentralChapterLabel(innerHtml, siblingSnippet);
         all.set(id, {
-            id, sourceId: "weebcentral", mangaId, number: numberLabel ? chapterNumber(numberLabel) : null,
-            numberLabel, title: null, volume: null, language: "en", publishedAt: null, groups: [],
-            pageCount: null, sourceUrl: href, duplicateNumber: false,
+            id,
+            sourceId: "weebcentral",
+            mangaId,
+            number: parsed.number,
+            numberLabel: parsed.numberLabel,
+            originalLabel: parsed.originalLabel,
+            title: parsed.title,
+            volume: null,
+            language: "en",
+            publishedAt: parsed.publishedAt,
+            groups: [],
+            pageCount: null,
+            sourceUrl: href,
+            duplicateNumber: false,
         });
     }
-    const ordered = [...all.values()].sort((a, b) => (a.number === null ? 1 : 0) - (b.number === null ? 1 : 0)
-        || (a.number ?? 0) - (b.number ?? 0)
-        || a.id.localeCompare(b.id));
+    const ordered = [...all.values()].sort((a, b) => (a.number === null ? 1 : 0) - (b.number === null ? 1 : 0) ||
+        (a.number ?? 0) - (b.number ?? 0) ||
+        a.id.localeCompare(b.id));
     duplicateNumbers(ordered);
     const items = ordered.slice((page - 1) * limit, page * limit);
     return { items, total: ordered.length, page, limit, hasMore: page * limit < ordered.length };
 }
 function normalizePages(html, chapterId, requestedMangaId) {
-    const pages = (0, html_1.voidElements)(html, "img").flatMap((image) => {
+    const pages = (0, html_1.voidElements)(html, "img")
+        .flatMap((image) => {
         const number = Number.parseInt(image.alt?.match(/page\s+(\d+)/i)?.[1] ?? "", 10);
-        const imageUrl = safeUrl(image.src ?? null, SITE);
+        const imageUrl = safeUrl(image.src ?? image["data-src"] ?? null, SITE);
         return number > 0 && imageUrl ? [{ pageNumber: number, imageUrl, width: null, height: null }] : [];
-    }).sort((a, b) => a.pageNumber - b.pageNumber);
+    })
+        .sort((a, b) => a.pageNumber - b.pageNumber);
     if (!pages.length)
         throw new provider_interface_1.SourceError("BAD_RESPONSE", "WeebCentral did not return readable chapter pages.");
     const title = (0, html_1.htmlText)((0, html_1.metaContent)(html, "property", "og:title") ?? "");
-    const seriesLink = (0, html_1.elements)(html, "a").map((anchor) => anchor.attrs.href ?? "")
+    const seriesLink = (0, html_1.elements)(html, "a")
+        .map((anchor) => anchor.attrs.href ?? "")
         .find((href) => !!sourceIdFromUrl(href));
     const mangaId = requestedMangaId?.toUpperCase() ?? (seriesLink ? sourceIdFromUrl(seriesLink) : null);
-    const match = title.match(/chapter\s+([\d.]+)/i);
+    const firstSegment = title.split("|")[0]?.trim() ?? "";
+    const parsedHeader = parseWeebCentralChapterLabel(firstSegment);
     return {
-        sourceId: "weebcentral", mangaId, chapterId,
+        sourceId: "weebcentral",
+        mangaId,
+        chapterId,
         chapterTitle: title.replace(/\s*\|\s*Weeb Central\s*$/i, "") || null,
-        chapterNumber: match?.[1] ?? null, language: "en", pages, groups: [],
+        chapterNumber: parsedHeader.numberLabel,
+        language: "en",
+        pages,
+        groups: [],
         sourceUrl: `${SITE}/chapters/${encodeURIComponent(chapterId)}`,
     };
 }
-//# sourceMappingURL=weebcentral.normalize.js.map

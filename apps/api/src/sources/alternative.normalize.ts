@@ -9,7 +9,12 @@ import type {
 export const ALTERNATIVE_PROVIDER_IDS = ["weebcentral", "asurascans"] as const;
 
 export function normalizeMatchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  return value
+    .toLowerCase()
+    .replace(/^official\s+/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 export function titlesRoughlyMatch(a: string, b: string): boolean {

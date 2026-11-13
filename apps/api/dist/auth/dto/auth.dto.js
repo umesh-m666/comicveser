@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VerifyDto = exports.ResetDto = exports.ForgotDto = exports.LoginDto = exports.RegisterDto = void 0;
+exports.VerifyDto = exports.ResetDto = exports.ForgotDto = exports.GoogleAuthDto = exports.LoginDto = exports.RegisterDto = void 0;
 const class_validator_1 = require("class-validator");
 class RegisterDto {
     username;
@@ -50,6 +50,23 @@ __decorate([
     (0, class_validator_1.Length)(1, 128),
     __metadata("design:type", String)
 ], LoginDto.prototype, "password", void 0);
+class GoogleAuthDto {
+    credential;
+    idToken;
+}
+exports.GoogleAuthDto = GoogleAuthDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(10, 4096),
+    __metadata("design:type", String)
+], GoogleAuthDto.prototype, "credential", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(10, 4096),
+    __metadata("design:type", String)
+], GoogleAuthDto.prototype, "idToken", void 0);
 class ForgotDto {
     email;
 }
@@ -82,4 +99,3 @@ __decorate([
     (0, class_validator_1.Length)(20, 100),
     __metadata("design:type", String)
 ], VerifyDto.prototype, "token", void 0);
-//# sourceMappingURL=auth.dto.js.map

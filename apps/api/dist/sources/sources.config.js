@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadSourcesConfig = loadSourcesConfig;
+exports.loadSourceSyncConfig = loadSourceSyncConfig;
 const BROWSER_LIKE = /mozilla|chrome|safari|firefox|edge|opera/i;
 /**
  * Reads and validates the external-source settings. Off by default.
@@ -27,4 +28,17 @@ function loadSourcesConfig(env = process.env) {
         throw new Error(`Invalid external source configuration: ${problems.join("; ")}`);
     return cfg;
 }
-//# sourceMappingURL=sources.config.js.map
+function loadSourceSyncConfig(env = process.env) {
+    const rawEnabled = (env.SOURCE_SYNC_ENABLED ?? "true").trim().toLowerCase();
+    const enabled = rawEnabled !== "false" && rawEnabled !== "0" && env.DISABLE_JOBS !== "true";
+    const parsedInterval = Number.parseInt((env.SOURCE_SYNC_INTERVAL_MINUTES ?? "30").trim(), 10);
+    const intervalMinutes = Number.isFinite(parsedInterval) && parsedInterval >= 1 ? Math.min(parsedInterval, 1440) : 30;
+    const parsedBatch = Number.parseInt((env.SOURCE_SYNC_BATCH_SIZE ?? "20").trim(), 10);
+    const batchSize = Number.isFinite(parsedBatch) && parsedBatch >= 1 ? Math.min(parsedBatch, 200) : 20;
+    return {
+        enabled,
+        intervalMinutes,
+        intervalMs: intervalMinutes * 60_000,
+        batchSize,
+    };
+}

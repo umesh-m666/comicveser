@@ -6,47 +6,44 @@ import { useSearchParams } from "next/navigation";
 import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import Track from "@/components/Track";
 import ComicCard from "@/components/ComicCard";
-import { BrowseQuery, Comic, GENRES, SORTS, STATUSES, TYPES, browseComics, years } from "@/lib/comics";
+import EmptyState from "@/components/EmptyState";
+import { CardGridSkeleton } from "@/components/LoadingSkeleton";
+import { BrowseQuery, Comic, GENRES, MIN_CHAPTER_OPTIONS, SORTS, STATUSES, TYPES, browseComics } from "@/lib/comics";
 
-const sel = "w-full rounded-md border border-line bg-surface px-2 py-2 text-sm";
+type Data = { items: Comic[]; total: number; page: number; pages: number };
+const EMPTY: Data = { items: [], total: 0, page: 1, pages: 1 };
+const FILTER_KEYS = ["genre", "status", "type", "creator", "minChapters", "year", "minRating"] as const;
 
-function Select({ name, label, value, options }: { name: string; label: string; value?: string; options: readonly (string | readonly [string, string])[] }) {
-  return (
-    <label className="block text-sm"><span className="mb-1 block text-muted">{label}</span>
-      <select name={name} defaultValue={value ?? ""} className={sel}>
-        {name !== "sort" && <option value="">Any</option>}
-        {options.map((o) => { const [v, l] = typeof o === "string" ? [o, o] : o; return <option key={v} value={v}>{l}</option>; })}
-      </select>
-    </label>
-  );
+function useDebounced(value: string, ms: number, onSettle: (v: string) => void) {
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const t = setTimeout(() => onSettle(value), ms);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, ms]);
 }
 
 function BrowseContent() {
-  const searchParams = useSearchParams();
-  const [data, setData] = useState<{ items: Comic[]; total: number; page: number; pages: number }>({
-    items: [],
-    total: 0,
-    page: 1,
-    pages: 1,
-  });
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const spKey = sp.toString();
+  const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const query: BrowseQuery = {
-    q: searchParams.get("q") ?? undefined,
-    genre: searchParams.get("genre") ?? undefined,
-    type: searchParams.get("type") ?? undefined,
-    status: searchParams.get("status") ?? undefined,
-    minRating: searchParams.get("minRating") ?? undefined,
-    year: searchParams.get("year") ?? undefined,
-    sort: searchParams.get("sort") ?? "updated",
-    page: searchParams.get("page") ?? "1",
+    q: sp.get("q") ?? undefined, genre: sp.get("genre") ?? undefined, type: sp.get("type") ?? undefined,
+    status: sp.get("status") ?? undefined, creator: sp.get("creator") ?? undefined, minChapters: sp.get("minChapters") ?? undefined,
+    minRating: sp.get("minRating") ?? undefined, year: sp.get("year") ?? undefined,
+    sort: sp.get("sort") ?? "updated", page: sp.get("page") ?? "1",
   };
   const hasActiveFilters = Boolean(query.genre || query.type || query.status || query.minRating || query.year || (query.sort && query.sort !== "updated"));
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    setLoading(true); setFailed(false);
     browseComics(query)
       .then((res) => {
         if (active) {
@@ -71,6 +68,53 @@ function BrowseContent() {
     u.set("page", String(page));
     return `/browse?${u}`;
   };
+  const single = (key: "status" | "type", value: string) => update({ [key]: query[key] === value ? null : value });
+
+  const activeFilters: { key: string; label: string; clear: () => void }[] = [
+    ...selectedGenres.map((g) => ({ key: `g-${g}`, label: g, clear: () => toggleGenre(g) })),
+    ...(query.status ? [{ key: "status", label: query.status, clear: () => update({ status: null }) }] : []),
+    ...(query.type ? [{ key: "type", label: query.type, clear: () => update({ type: null }) }] : []),
+    ...(query.creator ? [{ key: "creator", label: `Creator: ${query.creator}`, clear: () => update({ creator: null }) }] : []),
+    ...(query.minChapters ? [{ key: "minChapters", label: `${query.minChapters}+ chapters`, clear: () => update({ minChapters: null }) }] : []),
+    ...(query.minRating ? [{ key: "minRating", label: `Rating ${query.minRating}+`, clear: () => update({ minRating: null }) }] : []),
+    ...(query.year ? [{ key: "year", label: `Year ${query.year}`, clear: () => update({ year: null }) }] : []),
+  ];
+  const resetAll = () => { lastQ.current = null; setQInput(""); setCreatorInput(""); const u = new URLSearchParams(); const s = sp.get("sort"); if (s) u.set("sort", s); router.replace(u.toString() ? `${pathname}?${u}` : pathname, { scroll: false }); };
+  const hasAny = activeFilters.length > 0 || !!query.q;
+  const goPage = (p: number) => { update({ page: String(p) }, true); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const panel = (
+    <div className="space-y-6">
+      <fieldset>
+        <legend className="mb-2 text-sm font-semibold">Genres <span className="font-normal text-muted">(select several)</span></legend>
+        <div className="flex flex-wrap gap-1.5">
+          {GENRES.map((g) => <button key={g} type="button" className="cv-chip" aria-pressed={selectedGenres.includes(g)} onClick={() => toggleGenre(g)}>{g}</button>)}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-sm font-semibold">Status</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUSES.map((s) => <button key={s} type="button" className="cv-chip" aria-pressed={query.status === s} onClick={() => single("status", s)}>{s}</button>)}
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-sm font-semibold">Type</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPES.map((t) => <button key={t} type="button" className="cv-chip" aria-pressed={query.type === t} onClick={() => single("type", t)}>{t}</button>)}
+        </div>
+      </fieldset>
+      <label className="block text-sm"><span className="mb-1.5 block font-semibold">Creator</span>
+        <input value={creatorInput} onChange={(e) => setCreatorInput(e.target.value)} placeholder="Author or artist" className="w-full px-3 py-2 text-sm" />
+      </label>
+      <label className="block text-sm"><span className="mb-1.5 block font-semibold">Minimum chapters</span>
+        <select value={query.minChapters ?? ""} onChange={(e) => update({ minChapters: e.target.value || null })} className="w-full px-3 py-2 text-sm">
+          <option value="">Any</option>
+          {MIN_CHAPTER_OPTIONS.map((n) => <option key={n} value={n}>{n}+ chapters</option>)}
+        </select>
+      </label>
+      <button type="button" onClick={resetAll} disabled={!hasAny} className="cv-btn w-full">Reset filters</button>
+    </div>
+  );
 
   const pages: number[] = [];
   for (let p = 1; p <= data.pages; p++) {
@@ -154,7 +198,7 @@ function BrowseContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-muted">Loading comics...</div>}>
+    <Suspense fallback={<CardGridSkeleton count={12} />}>
       <BrowseContent />
     </Suspense>
   );

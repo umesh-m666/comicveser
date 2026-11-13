@@ -1,20 +1,34 @@
+"use client";
 import Link from "next/link";
 import { Star, BookOpen } from "lucide-react";
 import BookmarkButton from "./BookmarkButton";
 import { Comic, latestChapter } from "@/lib/comics";
 
-export function Cover({ hue, title, className = "", src }: { hue: number; title: string; className?: string; src?: string | null }) {
   return (
     <div
-      role="img" aria-label={`Cover of ${title}`}
-      className={`cv-cover relative flex items-end overflow-hidden rounded-xl border border-line p-3 ${className}`}
-      style={{ background: `linear-gradient(160deg, hsl(${hue} 62% 46%), hsl(${(hue + 42) % 360} 55% 12%))` }}
+      role="img"
+      aria-label={`Cover of ${title}`}
+      className={`cv-cover relative flex items-end overflow-hidden bg-[#181424] p-3 ${className}`}
+      style={{
+        background: `linear-gradient(160deg, hsl(${hue} 55% 38%), hsl(${(hue + 42) % 360} 50% 10%))`,
+      }}
     >
-      <div className="absolute inset-0 opacity-30" style={{ backgroundImage: "radial-gradient(circle at 70% 20%, white 0, transparent 2px), radial-gradient(circle at 20% 65%, white 0, transparent 2px)", backgroundSize: "42px 42px" }} />
-      <span className="relative z-10 line-clamp-3 text-sm font-extrabold leading-tight text-white drop-shadow-lg">{title}</span>
-      {src && (
+      {!showImage && (
+        <span className="relative z-10 line-clamp-3 text-sm font-extrabold leading-tight text-white drop-shadow-lg">
+          {title}
+        </span>
+      )}
+      {showImage && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading="lazy" decoding="async" className="absolute inset-0 z-20 h-full w-full object-cover" />
+        <img
+          src={src!}
+          alt={title}
+          onError={() => setImgError(true)}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 z-20 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        />
       )}
     </div>
   );

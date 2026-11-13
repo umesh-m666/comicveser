@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+**/node_modules/
+!apps/api/vendor/node_modules/
+!apps/api/vendor/node_modules/**
+
+# Build output
+.next/
+**/.next/
+dist/
+**/dist/
+!apps/api/vendor/node_modules/**/dist/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+*.pem
+.vercel
+apps/api/uploads/

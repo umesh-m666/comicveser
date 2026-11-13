@@ -19,4 +19,3 @@ const util_ts_1 = require("./util.ts");
 (0, node_test_1.test)("slugify never emits path or HTML characters", () => {
     strict_1.default.match((0, util_ts_1.slugify)("../../etc/passwd <script>"), /^[a-z0-9-]*$/);
 });
-//# sourceMappingURL=util.test.js.map

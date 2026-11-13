@@ -48,4 +48,3 @@ __decorate([
 class CreatorChapterDto extends (0, mapped_types_1.OmitType)(chapter_dto_1.CreateChapterDto, ["comicId", "publishState", "scheduledAt"]) {
 }
 exports.CreatorChapterDto = CreatorChapterDto;
-//# sourceMappingURL=creator.dto.js.map

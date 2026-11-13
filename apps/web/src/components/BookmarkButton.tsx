@@ -1,8 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Bookmark } from "lucide-react";
-import { ApiError, api } from "@/lib/api";
+import { useLibrary } from "./LibraryProvider";
 
 export default function BookmarkButton({ comicId, className = "", fill = false }: { comicId: string; className?: string; fill?: boolean }) {
   const router = useRouter();

@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from "class-validator";
 
 const LANG = /^[a-z]{2,3}(-[a-z]{2,4})?$/i;
 export class SearchSourcesQuery {
@@ -14,6 +14,22 @@ export class ChaptersQuery {
   @IsOptional() @Matches(LANG) language: string = "en";
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(500) page: number = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(500) limit: number = 100;
+}
+export class ComicChaptersQuery extends ChaptersQuery {
+  @IsOptional() @IsString() @Matches(/^[a-z0-9-]{2,30}$/) sourceId?: string;
+}
+export class FallbackCandidatesQuery {
+  @IsOptional() @IsString() @Length(0, 150) q?: string;
+  @IsOptional() @IsIn(["weebcentral", "asurascans"]) sourceId?: "weebcentral" | "asurascans";
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) page: number = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(24) limit: number = 12;
+}
+export class LinkFallbackDto {
+  @IsIn(["weebcentral", "asurascans"]) sourceId: "weebcentral" | "asurascans";
+  @IsString() @Length(1, 150) externalId: string;
+}
+export class ImportChaptersBodyDto {
+  @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) chapterIds?: string[];
 }
 export class PagesQuery { @IsOptional() @IsIn(["data", "data-saver"]) quality: "data" | "data-saver" = "data"; }
 export class SaveExternalDto {

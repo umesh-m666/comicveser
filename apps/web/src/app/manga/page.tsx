@@ -12,7 +12,7 @@ const sel = "w-full rounded-md border border-line bg-surface px-2 py-2 text-sm";
 function Select({ name, label, value, options }: { name: string; label: string; value?: string; options: readonly (string | readonly [string, string])[] }) {
   return (
     <label className="block text-sm"><span className="mb-1 block text-muted">{label}</span>
-      <select name={name} defaultValue={value ?? ""} className={sel}>
+      <select id={`manga-${name}`} name={name} aria-label={label} defaultValue={value ?? ""} className={sel}>
         {name !== "sort" && <option value="">Any</option>}
         {options.map((o) => { const [v, l] = typeof o === "string" ? [o, o] : o; return <option key={v} value={v}>{l}</option>; })}
       </select>

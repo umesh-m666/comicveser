@@ -1,36 +1,49 @@
-import { BadRequestException, ConflictException, HttpException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, HttpException, Inject, Injectable, Logger, NotFoundException, Optional } from "@nestjs/common";
+import { NotificationsService } from "../notifications/notifications.service";
+import { parseWeebCentralChapterLabel } from "./weebcentral.normalize";
+import { resolveChapterDisplayNumber } from "./chapter-display";
+import { loadSourceSyncConfig } from "./sources.config";
 import { ComicStatus, ComicType, Prisma, SourceTitleState } from "@prisma/client";
 import { CacheService } from "../cache/cache.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { slugify } from "../common/util";
 import { SourceError } from "./provider.interface";
 import type {
-  AlternativeChapterItem,
   AlternativeSourceMatch,
   ChapterItem,
   ChaptersResponse,
   ContentType,
   MangaDetails,
   MangaSourceProvider,
+  MangaSummary,
   SearchQuery,
 } from "./provider.interface";
 import type { SourcesConfig } from "./sources.config";
-
-export const SOURCES_CONFIG = Symbol("SOURCES_CONFIG");
-export const SOURCE_PROVIDERS = Symbol("SOURCE_PROVIDERS");
-
-interface ErrorEntry { at: string; sourceId: string; code: string; message: string }
-const TTL = { search: 300, details: 600, chapters: 300 }; // seconds. Page image URLs are temporary, so they are never cached.
-const RECORDED = new Set(["SOURCE_UNAVAILABLE", "SOURCE_TIMEOUT", "SOURCE_RATE_LIMITED", "BAD_RESPONSE"]);
-const MAX_SOURCE_OFFSET = 10_000;
-const DEFAULT_CHAPTER_LIMIT = 500;
 import {
   ALTERNATIVE_PROVIDER_IDS,
   buildAlternativeSourceMatch,
   chapterNumbersMatch,
   findMatchingSummary,
+  normalizeMatchText,
+  titlesRoughlyMatch,
 } from "./alternative.normalize";
 
+export const SOURCES_CONFIG = Symbol("SOURCES_CONFIG");
+export const SOURCE_PROVIDERS = Symbol("SOURCE_PROVIDERS");
+
+export interface ErrorEntry { at: string; sourceId: string; code: string; message: string }
+export interface PublishErrorEntry {
+  at: string;
+  sourceId: string;
+  externalId: string;
+  operation: string;
+  code: string;
+  message: string;
+}
+const TTL = { search: 300, details: 600, chapters: 300 }; // seconds. Page image URLs are temporary, so they are never cached.
+const RECORDED = new Set(["SOURCE_UNAVAILABLE", "SOURCE_TIMEOUT", "SOURCE_RATE_LIMITED", "BAD_RESPONSE"]);
+const MAX_SOURCE_OFFSET = 10_000;
+const DEFAULT_CHAPTER_LIMIT = 500;
 const CONTENT_TYPES: Record<string, ComicType> = { manga: "MANGA", manhwa: "MANHWA", manhua: "MANHUA" };
 
 function safeDate(value: string | null) {
@@ -40,8 +53,72 @@ function safeDate(value: string | null) {
 }
 
 function chapterTitle(c: ChapterItem) {
-  const label = c.numberLabel ? `Chapter ${c.numberLabel}` : "Special chapter";
-  return c.title ? `${label}: ${c.title}`.slice(0, 300) : label;
+  if (!c.numberLabel) {
+    return (c.title?.trim() || "Special chapter").slice(0, 300);
+  }
+  const trimmed = c.numberLabel.trim();
+  const hasPrefix = /^(?:chapter|episode|ep\.?|ch\.?)\b/i.test(trimmed);
+  const label = hasPrefix ? trimmed : `Chapter ${trimmed}`;
+  return c.title && c.title.trim() !== trimmed ? `${label}: ${c.title.trim()}`.slice(0, 300) : label.slice(0, 300);
+}
+
+function hasNumberCollision(usedNumbers: Set<number>, candidate: number): boolean {
+  if (usedNumbers.has(candidate)) return true;
+  for (const n of usedNumbers) {
+    if (Math.abs(n - candidate) < 0.0001) return true;
+  }
+  return false;
+}
+
+function allocateUniqueChapterNumber(
+  item: ChapterItem,
+  usedNumbers: Set<number>,
+  nextSequentialRef: { value: number },
+): number {
+  const parsed =
+    item.number !== null && Number.isFinite(item.number) && item.number >= 0
+      ? item.number
+      : item.numberLabel
+      ? Number.parseFloat(item.numberLabel)
+      : Number.NaN;
+
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    if (!hasNumberCollision(usedNumbers, parsed)) {
+      usedNumbers.add(parsed);
+      nextSequentialRef.value = Math.max(nextSequentialRef.value, Math.floor(parsed) + 1);
+      return parsed;
+    }
+    // Duplicate release of the same chapter number: assign a tiny decimal offset so sorting and uniqueness both hold
+    for (let offset = 1; offset <= 999; offset++) {
+      const candidate = Number((parsed + offset * 0.001).toFixed(4));
+      if (!hasNumberCollision(usedNumbers, candidate)) {
+        usedNumbers.add(candidate);
+        return candidate;
+      }
+    }
+  }
+
+  let fallback = Math.max(1, Math.ceil(nextSequentialRef.value));
+  while (hasNumberCollision(usedNumbers, fallback)) {
+    fallback += 1;
+  }
+  usedNumbers.add(fallback);
+  nextSequentialRef.value = fallback + 1;
+  return fallback;
+}
+
+export interface FallbackCandidateItem {
+  sourceId: string;
+  sourceName: string;
+  externalId: string;
+  title: string;
+  alternativeTitles: string[];
+  coverUrl: string | null;
+  contentType: ContentType;
+  year: number | null;
+  status: string | null;
+  sourceUrl: string;
+  linked: boolean;
 }
 
 @Injectable()
@@ -49,10 +126,43 @@ export class SourcesService {
   private log = new Logger("Sources");
   private providers = new Map<string, MangaSourceProvider>();
   private errors: ErrorEntry[] = [];
+  private publishErrors: PublishErrorEntry[] = [];
+
+  getRecentProviderErrors(): ErrorEntry[] {
+    return [...this.errors].reverse();
+  }
+
+  getRecentPublishErrors(): PublishErrorEntry[] {
+    return [...this.publishErrors].reverse();
+  }
+
+  private recordPublishError(sourceId: string, externalId: string, operation: string, code: string, message: string) {
+    const entry: PublishErrorEntry = {
+      at: new Date().toISOString(),
+      sourceId,
+      externalId,
+      operation,
+      code,
+      message,
+    };
+    this.publishErrors.push(entry);
+    if (this.publishErrors.length > 50) this.publishErrors.shift();
+    this.log.error(
+      JSON.stringify({
+        event: "source.publish.error",
+        provider: sourceId,
+        externalId,
+        operation,
+        errorCode: code,
+        message,
+      }),
+    );
+  }
 
   constructor(
     private db: PrismaService, private cache: CacheService,
     @Inject(SOURCES_CONFIG) private cfg: SourcesConfig, @Inject(SOURCE_PROVIDERS) providers: MangaSourceProvider[],
+    @Optional() private notifications?: NotificationsService,
   ) { for (const p of providers) this.providers.set(p.id, p); }
 
   private record(sourceId: string, e: SourceError) {
@@ -110,19 +220,30 @@ export class SourcesService {
     sourceUrl: string;
     coverUrl: string | null;
     contentType?: string;
+    comicId?: string | null;
   }) {
     const contentType = alt.contentType && ["manga", "manhwa", "manhua"].includes(alt.contentType)
       ? alt.contentType
       : "manga";
-    return this.db.sourceTitle.upsert({
+    const existing = await this.db.sourceTitle.findUnique({
       where: { sourceId_externalId: { sourceId: alt.sourceId, externalId: alt.externalId } },
-      update: {
-        title: alt.title,
-        sourceUrl: alt.sourceUrl,
-        coverUrl: alt.coverUrl,
-        state: "APPROVED",
-      },
-      create: {
+    });
+    if (existing) {
+      const updated = await this.db.sourceTitle.update({
+        where: { id: existing.id },
+        data: {
+          title: alt.title,
+          sourceUrl: alt.sourceUrl,
+          coverUrl: alt.coverUrl,
+          state: "APPROVED",
+          ...(alt.comicId && !existing.comicId ? { comicId: alt.comicId } : {}),
+        },
+      });
+      await this.db.setSourceTitleRole(updated.id, "CHAPTER_FALLBACK");
+      return updated;
+    }
+    const created = await this.db.sourceTitle.create({
+      data: {
         sourceId: alt.sourceId,
         externalId: alt.externalId,
         title: alt.title,
@@ -130,8 +251,11 @@ export class SourcesService {
         coverUrl: alt.coverUrl,
         contentType,
         state: "APPROVED",
+        ...(alt.comicId ? { comicId: alt.comicId } : {}),
       },
     });
+    await this.db.setSourceTitleRole(created.id, "CHAPTER_FALLBACK");
+    return created;
   }
 
   async findAlternativeSources(
@@ -151,7 +275,7 @@ export class SourcesService {
         const sourceName = settings.get(altSourceId)?.displayName ?? provider.displayName;
 
         try {
-          let matchedItem: Awaited<ReturnType<MangaSourceProvider["search"]>>["items"][number] | undefined;
+          let matchedItem: MangaSummary | undefined;
           for (const queryTitle of cleanTitles.slice(0, 2)) {
             const searchRes = await this.cache.wrap(
               `src:${altSourceId}:search:${JSON.stringify({ q: queryTitle, page: 1, limit: 10 })}`,
@@ -255,42 +379,78 @@ export class SourcesService {
       return { external: null, alternatives: [] };
     }
 
-    // Check if ComicK has direct readable pages first.
-    const comickPages = await this.pages(
-      "comick",
-      ch.sourceChapter.externalId,
-      "data",
-      ch.sourceChapter.sourceTitle.externalId,
-    ).catch(() => null);
-    if (comickPages && comickPages.pages.length > 0) {
-      return { external: null, alternatives: [] };
-    }
-
     const rawLabel = ch.sourceChapter.numberLabel ?? String(ch.number);
     const targetNum = Number.parseFloat(rawLabel);
+    const settings = await this.settings();
+
+    // 1. Check if the comic has explicitly confirmed CHAPTER_FALLBACK sources first.
+    const comicSourceTitles = await this.db.sourceTitle.findMany({
+      where: { comicId: ch.comic.id, state: "APPROVED" },
+    });
+    const roleMap = await this.db.getSourceTitleRolesByIds(comicSourceTitles.map((st) => st.id));
+    const linkedFallbacks = comicSourceTitles.filter(
+      (st) => st.sourceId !== "comick" && (roleMap.get(st.id) === "CHAPTER_FALLBACK" || st.id !== ch.sourceChapter!.sourceTitleId),
+    );
+
+    for (const fb of linkedFallbacks) {
+      const provider = this.providers.get(fb.sourceId);
+      if (!provider || settings.get(fb.sourceId)?.enabled === false) continue;
+      try {
+        const chRes = await this.providerChapters(fb.sourceId, fb.externalId, {
+          language: ch.sourceChapter.language ?? "en",
+          page: 1,
+          limit: DEFAULT_CHAPTER_LIMIT,
+        });
+        const match = chRes.items.find((item) =>
+          chapterNumbersMatch(item.numberLabel, item.number, rawLabel, Number.isNaN(targetNum) ? ch.number : targetNum),
+        );
+        if (match) {
+          const existingConflict = await this.db.sourceChapter.findUnique({
+            where: { sourceTitleId_externalId: { sourceTitleId: fb.id, externalId: match.id } },
+            select: { id: true, chapterId: true },
+          });
+          if (!existingConflict || existingConflict.chapterId === ch.id) {
+            await this.db.sourceChapter.update({
+              where: { id: ch.sourceChapter.id },
+              data: {
+                sourceTitleId: fb.id,
+                externalId: match.id,
+                sourceUrl: match.sourceUrl,
+                groups: match.groups,
+                language: match.language ?? ch.sourceChapter.language,
+              },
+            });
+          }
+          const lang = match.language ?? ch.sourceChapter.language ?? "en";
+          return {
+            external: {
+              sourceId: fb.sourceId,
+              mangaId: fb.externalId,
+              chapterId: match.id,
+              sourceUrl: match.sourceUrl,
+              groups: match.groups,
+              readerUrl: `/sources/${encodeURIComponent(fb.sourceId)}/${encodeURIComponent(fb.externalId)}/read/${encodeURIComponent(match.id)}?lang=${encodeURIComponent(lang)}`,
+            },
+            alternatives: [],
+          };
+        }
+      } catch {
+        // Continue to next fallback
+      }
+    }
+
+    // 2. Otherwise search WeebCentral and Asura Scans for matching series & chapter.
     const candidateTitles = [
       ch.comic.title,
       ch.sourceChapter.sourceTitle.title,
       ch.comic.altTitle ?? "",
     ];
-
     const alternatives = await this.findAlternativeSources(
       candidateTitles,
       ch.sourceChapter.language ?? "en",
       rawLabel,
       Number.isNaN(targetNum) ? ch.number : targetNum,
     );
-
-    for (const alt of alternatives) {
-      await this.ensureApprovedAlternativeSourceTitle({
-        sourceId: alt.sourceId,
-        externalId: alt.externalId,
-        title: alt.title,
-        sourceUrl: alt.sourceUrl,
-        coverUrl: alt.coverUrl,
-        contentType: ch.sourceChapter.sourceTitle.contentType,
-      }).catch(() => null);
-    }
 
     const matchedAlt = alternatives.find((alt) => !!alt.matchedChapter);
     if (!matchedAlt || !matchedAlt.matchedChapter) {
@@ -324,7 +484,7 @@ export class SourcesService {
         });
       }
     } catch {
-      // Even if DB update is skipped due to a concurrent request, still return the preserved alternative source IDs.
+      // Return preserved alternative identifiers even if concurrent update occurred.
     }
 
     return {
@@ -376,6 +536,10 @@ export class SourcesService {
   }
   async chapters(sourceId: string, externalId: string, o: { language: string; page: number; limit: number }) {
     const title = await this.publishedTitle(sourceId, externalId);
+    if (sourceId === "comick") {
+      // ComicK chapters are not displayed directly; chapters come from linked CHAPTER_FALLBACK sources (WeebCentral / Asura Scans).
+      return { items: [], total: 0, page: o.page, limit: o.limit, hasMore: false };
+    }
     const where = { sourceTitleId: title.id, chapter: { publishState: "PUBLISHED" as const, deletedAt: null } };
     const [total, rows] = await Promise.all([
       this.db.sourceChapter.count({ where }),
@@ -384,7 +548,7 @@ export class SourcesService {
         orderBy: { chapter: { number: "asc" } }, skip: (o.page - 1) * o.limit, take: o.limit,
       }),
     ]);
-    if (total === 0 && !title.comicId) {
+    if (total === 0) {
       return this.providerChapters(sourceId, externalId, o);
     }
     return {
@@ -403,7 +567,9 @@ export class SourcesService {
   }
   async publicPages(sourceId: string, externalId: string, chapterId: string, quality: "data" | "data-saver") {
     const title = await this.publishedTitle(sourceId, externalId);
-    if (title.comicId !== null) {
+    const roleMap = await this.db.getSourceTitleRolesByIds([title.id]);
+    const role = roleMap.get(title.id) ?? "PRIMARY";
+    if (title.comicId !== null && role === "PRIMARY") {
       const chapter = await this.db.sourceChapter.findFirst({
         where: { sourceTitleId: title.id, externalId: chapterId, chapter: { publishState: "PUBLISHED", deletedAt: null } },
         select: { id: true },
@@ -416,7 +582,15 @@ export class SourcesService {
   }
   async publishedChapterPages(chapterId: string, from: number, limit: number) {
     const row = await this.db.sourceChapter.findFirst({
-      where: { chapterId, chapter: { publishState: "PUBLISHED", deletedAt: null, comic: { publishState: "PUBLISHED", deletedAt: null } }, sourceTitle: { state: "APPROVED" } },
+      where: {
+        chapterId,
+        chapter: {
+          publishState: "PUBLISHED",
+          deletedAt: null,
+          comic: { publishState: "PUBLISHED", deletedAt: null },
+        },
+        sourceTitle: { state: "APPROVED" },
+      },
       include: { sourceTitle: true },
     });
     if (!row) return null;
@@ -503,12 +677,13 @@ export class SourcesService {
 
     const alerts: { id: string; comicId: string; comicTitle: string; sourceId: string; sourceName: string; title: string; availableCount: number; totalSourceChapters: number; url: string }[] = [];
     for (const row of titles) {
+      if (row.sourceId === "comick") continue;
       const provider = this.providers.get(row.sourceId);
       if (!provider || !row.comic) continue;
       let sourceChapters: ChaptersResponse;
       try {
         sourceChapters = await this.providerChapters(row.sourceId, row.externalId, {
-          language: "en", page: 1, limit: row.sourceId === "comick" ? 20 : 50,
+          language: "en", page: 1, limit: 50,
         });
       } catch {
         continue;
@@ -554,8 +729,6 @@ export class SourcesService {
       ...result,
       items: result.items.map((item) => {
         const review = states.get(item.externalId);
-        // Older versions left the SourceTitle attached to a soft-deleted Comic.
-        // Treat that title as awaiting approval so the administrator can publish it again.
         const archivedPublication = !!review && (review.state === "APPROVED" || review.state === "UNPUBLISHED") && (!review.comic || review.comic.deletedAt !== null);
         return {
           ...item,
@@ -610,7 +783,16 @@ export class SourcesService {
   async adminDetails(sourceId: string, externalId: string) {
     const [details, review] = await Promise.all([
       this.resolveDetailsWithDbFallback(sourceId, externalId),
-      this.db.sourceTitle.findUnique({ where: { sourceId_externalId: { sourceId, externalId } }, select: { state: true, reviewNote: true, reviewedAt: true, comic: { select: { id: true, slug: true, publishState: true, deletedAt: true } } } }),
+      this.db.sourceTitle.findUnique({
+        where: { sourceId_externalId: { sourceId, externalId } },
+        select: {
+          id: true,
+          state: true,
+          reviewNote: true,
+          reviewedAt: true,
+          comic: { select: { id: true, slug: true, publishState: true, deletedAt: true } },
+        },
+      }),
     ]);
     const archivedPublication = !!review && (review.state === "APPROVED" || review.state === "UNPUBLISHED") && (!review.comic || review.comic.deletedAt !== null);
     return {
@@ -620,81 +802,446 @@ export class SourcesService {
     };
   }
 
-  adminChapters(sourceId: string, externalId: string, q: { language: string; page: number; limit: number }) {
-    return this.providerChapters(sourceId, externalId, q);
-  }
-
-  async adminComicChapters(comicId: string, q: { language: string; page: number; limit: number }) {
-    const title = await this.db.sourceTitle.findUnique({
-      where: { comicId },
-      include: { comic: { select: { id: true, title: true, altTitle: true } } },
-    });
-    if (!title) return { source: null, chapters: null, alternatives: [] };
-
-    const [details, chaptersResult, setting] = await Promise.all([
-      this.resolveDetailsWithDbFallback(title.sourceId, title.externalId).catch(() => null),
-      this.providerChapters(title.sourceId, title.externalId, q).catch((): ChaptersResponse => ({
+  async adminChapters(sourceId: string, externalId: string, q: { language: string; page: number; limit: number }) {
+    if (sourceId === "comick") {
+      // Step 2 & 3: Request ComicK chapter catalogue, detect upstream page unavailability,
+      // and never display ComicK chapters directly; direct admin to WeebCentral or Asura Scans fallback.
+      await this.providerChapters(sourceId, externalId, { ...q, limit: 20 }).catch(() => null);
+      return {
         items: [],
         total: 0,
         page: q.page,
-        limit: title.sourceId === "comick" ? 20 : q.limit,
+        limit: 20,
         hasMore: false,
-      })),
-      this.db.sourceSetting.findUnique({ where: { sourceId: title.sourceId }, select: { displayName: true } }),
+        upstreamUnavailable: true,
+        upstreamMessage:
+          "ComicK chapter images are unavailable upstream. ComicK chapters are hidden — approve the canonical ComicK title and link WeebCentral or Asura Scans as an alternative chapter source.",
+      };
+    }
+    return this.providerChapters(sourceId, externalId, q);
+  }
+
+  /**
+   * GET /admin/sources/comics/:id/chapters
+   * Fetches chapters from the comic's active source:
+   * - If the primary source is ComicK, ComicK chapters are never displayed; instead, chapters are fetched
+   *   from the selected or first linked CHAPTER_FALLBACK source (WeebCentral or Asura Scans).
+   */
+  async adminComicChapters(comicId: string, q: { language: string; page: number; limit: number; sourceId?: string }) {
+    const sourceTitles = await this.db.sourceTitle.findMany({
+      where: { comicId },
+      include: { comic: { select: { id: true, slug: true, title: true, altTitle: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!sourceTitles.length) {
+      return {
+        source: null,
+        primarySource: null,
+        fallbacks: [],
+        upstreamUnavailable: false,
+        upstreamMessage: null,
+        chapters: null,
+      };
+    }
+
+    const roleMap = await this.db.getSourceTitleRolesByIds(sourceTitles.map((row) => row.id));
+    const settings = await this.settings();
+    const displayNameOf = (sid: string) => settings.get(sid)?.displayName ?? this.providers.get(sid)?.displayName ?? sid;
+
+    const primaryRow =
+      sourceTitles.find((row) => roleMap.get(row.id) === "PRIMARY" && row.sourceId === "comick") ??
+      sourceTitles.find((row) => roleMap.get(row.id) === "PRIMARY") ??
+      sourceTitles[0];
+    const fallbackRows = sourceTitles.filter((row) => row.id !== primaryRow.id);
+
+    const primarySource = {
+      id: primaryRow.sourceId,
+      sourceId: primaryRow.sourceId,
+      externalId: primaryRow.externalId,
+      title: primaryRow.title,
+      sourceUrl: primaryRow.sourceUrl,
+      coverUrl: primaryRow.coverUrl,
+      contentType: primaryRow.contentType,
+      state: primaryRow.state,
+      role: "PRIMARY" as const,
+      displayName: displayNameOf(primaryRow.sourceId),
+    };
+
+    const fallbacks = fallbackRows.map((row) => ({
+      id: row.sourceId,
+      sourceId: row.sourceId,
+      externalId: row.externalId,
+      title: row.title,
+      sourceUrl: row.sourceUrl,
+      coverUrl: row.coverUrl,
+      contentType: row.contentType,
+      state: row.state,
+      role: "CHAPTER_FALLBACK" as const,
+      displayName: displayNameOf(row.sourceId),
+    }));
+
+    const isComickPrimary = primaryRow.sourceId === "comick";
+    let activeRow = primaryRow;
+    if (q.sourceId && q.sourceId !== "comick") {
+      const requested = sourceTitles.find((row) => row.sourceId === q.sourceId);
+      if (requested) activeRow = requested;
+    } else if (isComickPrimary) {
+      activeRow = fallbackRows[0] ?? primaryRow;
+    }
+
+    // Step 3: ComicK chapters must NEVER be displayed; only linked alternatives (WeebCentral / Asura Scans).
+    if (activeRow.sourceId === "comick") {
+      await this.providerChapters("comick", activeRow.externalId, { language: q.language, page: 1, limit: 20 }).catch(() => null);
+      return {
+        source: {
+          ...primarySource,
+          availableLanguages: ["en"],
+        },
+        primarySource,
+        fallbacks,
+        upstreamUnavailable: true,
+        upstreamMessage:
+          "ComicK chapter images are unavailable upstream. Search WeebCentral or Asura Scans below, confirm the matching series, and import chapters from the linked alternative provider.",
+        chapters: null,
+      };
+    }
+
+    const [details, chaptersResult] = await Promise.all([
+      this.resolveDetailsWithDbFallback(activeRow.sourceId, activeRow.externalId).catch(() => null),
+      this.providerChapters(activeRow.sourceId, activeRow.externalId, {
+        language: q.language,
+        page: q.page,
+        limit: q.limit,
+      }),
     ]);
 
-    const existingComicChapters = await this.db.chapter.findMany({
-      where: { comicId, deletedAt: null },
-      select: { id: true, number: true, sourceChapter: { select: { externalId: true, numberLabel: true, sourceTitle: { select: { sourceId: true, externalId: true } } } } },
-    });
-
-    const importedExternalIds = new Set(
-      existingComicChapters
-        .map((row) => row.sourceChapter?.externalId)
-        .filter((id): id is string => !!id),
-    );
+    const importedRows = chaptersResult.items.length
+      ? await this.db.sourceChapter.findMany({
+          where: {
+            sourceTitleId: activeRow.id,
+            externalId: { in: chaptersResult.items.map((chapter) => chapter.id) },
+          },
+          select: { externalId: true, chapterId: true },
+        })
+      : [];
+    const importedMap = new Map(importedRows.map((row) => [row.externalId, row.chapterId]));
 
     const availableLanguages = details?.availableLanguages?.length
       ? [...new Set(["en", ...details.availableLanguages])]
       : ["en"];
 
-    let alternatives: (AlternativeSourceMatch & { chapters: (AlternativeChapterItem & { imported: boolean })[] })[] = [];
-    if (title.sourceId === "comick") {
-      const candidateTitles = [
-        title.comic?.title ?? "",
-        title.title,
-        title.comic?.altTitle ?? "",
-        details?.title ?? "",
-        ...(details?.alternativeTitles ?? []),
-      ];
-      const rawAlternatives = await this.findAlternativeSources(candidateTitles, q.language);
-      alternatives = rawAlternatives.map((alt) => ({
-        ...alt,
-        chapters: alt.chapters.map((ch) => {
-          const alreadyLinked = existingComicChapters.some((existing) =>
-            existing.sourceChapter?.sourceTitle.sourceId === alt.sourceId &&
-            existing.sourceChapter?.externalId === ch.id,
-          );
-          return { ...ch, imported: alreadyLinked };
-        }),
-      }));
-    }
+    const activeSourceName = displayNameOf(activeRow.sourceId);
+    const comicSlug = primaryRow.comic?.slug ?? null;
 
     return {
       source: {
-        id: title.sourceId,
-        externalId: title.externalId,
-        title: title.title,
-        state: title.state,
-        displayName: setting?.displayName ?? this.providers.get(title.sourceId)?.displayName ?? title.sourceId,
+        id: activeRow.sourceId,
+        sourceId: activeRow.sourceId,
+        externalId: activeRow.externalId,
+        title: activeRow.title,
+        sourceUrl: activeRow.sourceUrl,
+        coverUrl: activeRow.coverUrl,
+        contentType: activeRow.contentType,
+        state: activeRow.state,
+        role: activeRow.id === primaryRow.id ? ("PRIMARY" as const) : ("CHAPTER_FALLBACK" as const),
+        displayName: activeSourceName,
         availableLanguages,
+        comicSlug,
       },
+      primarySource,
+      fallbacks,
+      upstreamUnavailable: isComickPrimary,
+      upstreamMessage: isComickPrimary
+        ? `ComicK chapters are hidden. Showing chapters from linked fallback source: ${activeSourceName}.`
+        : null,
       chapters: {
         ...chaptersResult,
-        items: chaptersResult.items.map((chapter) => ({ ...chapter, imported: importedExternalIds.has(chapter.id) })),
+        items: chaptersResult.items.map((chapter) => {
+          const importedChapterId = importedMap.get(chapter.id) ?? null;
+          return {
+            ...chapter,
+            sourceId: activeRow.sourceId,
+            sourceName: activeSourceName,
+            mangaId: activeRow.externalId,
+            imported: !!importedChapterId,
+            importedChapterId,
+            comicReaderUrl: importedChapterId && comicSlug ? `/comics/${comicSlug}/chapter/${importedChapterId}` : null,
+            sourceReaderUrl: `/sources/${encodeURIComponent(activeRow.sourceId)}/${encodeURIComponent(activeRow.externalId)}/read/${encodeURIComponent(chapter.id)}?lang=${encodeURIComponent(chapter.language ?? q.language)}`,
+          };
+        }),
       },
-      alternatives,
     };
+  }
+
+  /**
+   * GET /admin/sources/comics/:id/fallback-candidates
+   * Searches WeebCentral and/or Asura Scans for alternative series matching the comic.
+   */
+  async adminFallbackCandidates(
+    comicId: string,
+    q: { q?: string; sourceId?: "weebcentral" | "asurascans"; page: number; limit: number },
+  ) {
+    const comic = await this.db.comic.findFirst({
+      where: { id: comicId, deletedAt: null },
+      select: { id: true, title: true, type: true, releaseYear: true },
+    });
+    if (!comic) throw new NotFoundException("Comic not found.");
+
+    const comicSourceTitles = await this.db.sourceTitle.findMany({
+      where: { comicId },
+      orderBy: { createdAt: "asc" },
+    });
+    const roleMap = await this.db.getSourceTitleRolesByIds(comicSourceTitles.map((st) => st.id));
+    const primaryTitle =
+      comicSourceTitles.find((st) => roleMap.get(st.id) === "PRIMARY") ?? comicSourceTitles[0];
+
+    const searchQuery = (q.q?.trim() || primaryTitle?.title || comic.title).trim();
+    if (!searchQuery) return { query: "", items: [] as FallbackCandidateItem[] };
+
+    const defaultContentType: ContentType =
+      primaryTitle?.contentType && ["manga", "manhwa", "manhua"].includes(primaryTitle.contentType)
+        ? (primaryTitle.contentType as ContentType)
+        : ["manga", "manhwa", "manhua"].includes(comic.type.toLowerCase())
+          ? (comic.type.toLowerCase() as ContentType)
+          : "manhwa";
+
+    const settings = await this.settings();
+    const targetProviders = q.sourceId
+      ? [q.sourceId]
+      : [...ALTERNATIVE_PROVIDER_IDS];
+
+    const linkedKeys = new Set(
+      comicSourceTitles
+        .filter((st) => st.id !== primaryTitle?.id || roleMap.get(st.id) === "CHAPTER_FALLBACK")
+        .map((st) => `${st.sourceId}:${st.externalId}`),
+    );
+
+    const providerResults = await Promise.all(
+      targetProviders.map(async (pid): Promise<FallbackCandidateItem[]> => {
+        const provider = this.providers.get(pid);
+        if (!provider || settings.get(pid)?.enabled === false) return [];
+        const sourceName = settings.get(pid)?.displayName ?? provider.displayName;
+        try {
+          const res = await this.search(pid, {
+            q: searchQuery,
+            page: q.page ?? 1,
+            limit: q.limit ?? 12,
+          });
+          return res.items.map((item) => {
+            const cleanTitle = item.title.replace(/^Official\s+/i, "").trim() || item.title;
+            const isMatch = titlesRoughlyMatch(cleanTitle, comic.title) || titlesRoughlyMatch(cleanTitle, searchQuery);
+            return {
+              sourceId: pid,
+              sourceName,
+              externalId: item.externalId,
+              title: cleanTitle,
+              alternativeTitles: item.alternativeTitles,
+              coverUrl: item.coverUrl?.replace(/^\/sources\//, "/admin/sources/") ?? null,
+              contentType: item.contentType !== "unknown" ? item.contentType : defaultContentType,
+              year: item.year ?? (isMatch ? comic.releaseYear : null),
+              status: item.status ?? null,
+              sourceUrl: item.sourceUrl,
+              linked: linkedKeys.has(`${pid}:${item.externalId}`),
+            };
+          });
+        } catch (err) {
+          this.log.warn(`Fallback candidate search failed on ${pid}: ${(err as Error)?.message}`);
+          return [];
+        }
+      }),
+    );
+
+    return {
+      query: searchQuery,
+      items: providerResults.flat(),
+    };
+  }
+
+  /**
+   * POST /admin/sources/comics/:id/fallbacks
+   * Links a confirmed WeebCentral or Asura Scans series to the comic with role = CHAPTER_FALLBACK.
+   */
+  async linkFallbackSource(
+    comicId: string,
+    dto: { sourceId: "weebcentral" | "asurascans"; externalId: string },
+    actorId: string,
+  ) {
+    if (!ALTERNATIVE_PROVIDER_IDS.includes(dto.sourceId)) {
+      throw new BadRequestException("Only WeebCentral and Asura Scans can be linked as fallback chapter sources.");
+    }
+    const comic = await this.db.comic.findFirst({
+      where: { id: comicId, deletedAt: null },
+      select: { id: true, title: true, slug: true },
+    });
+    if (!comic) throw new NotFoundException("Comic not found.");
+
+    const details = await this.resolveDetailsWithDbFallback(dto.sourceId, dto.externalId).catch(async () => {
+      const searchRes = await this.search(dto.sourceId, { q: comic.title, page: 1, limit: 12 }).catch(() => null);
+      const found = searchRes?.items.find((item) => item.externalId === dto.externalId);
+      if (found) {
+        return {
+          ...found,
+          authors: found.authors ?? [],
+          artists: found.artists ?? [],
+          year: found.year ?? null,
+          availableLanguages: found.availableLanguages ?? ["en"],
+        } as MangaDetails;
+      }
+      throw new BadRequestException("Could not verify the selected fallback series.");
+    });
+
+    const settings = await this.settings();
+    const displayName = settings.get(dto.sourceId)?.displayName ?? this.providers.get(dto.sourceId)?.displayName ?? dto.sourceId;
+    const validContentType = details.contentType === "unknown" ? "manga" : details.contentType;
+
+    const linked = await this.db.$transaction(async (tx) => {
+      const existingByExternal = await tx.sourceTitle.findUnique({
+        where: { sourceId_externalId: { sourceId: dto.sourceId, externalId: dto.externalId } },
+        include: { comic: { select: { id: true, slug: true, deletedAt: true } } },
+      });
+      const previousComic =
+        existingByExternal?.comicId &&
+        existingByExternal.comicId !== comicId &&
+        existingByExternal.comic &&
+        existingByExternal.comic.deletedAt === null
+          ? existingByExternal.comic
+          : null;
+
+      // If this comic already has a CHAPTER_FALLBACK for this sourceId with a different externalId, replace it.
+      const existingForProvider = await tx.sourceTitle.findFirst({
+        where: { comicId, sourceId: dto.sourceId },
+      });
+      if (existingForProvider && existingForProvider.externalId !== dto.externalId) {
+        const providerRoleMap = await this.db.getSourceTitleRolesByIds([existingForProvider.id], tx);
+        if (providerRoleMap.get(existingForProvider.id) === "PRIMARY" && existingForProvider.sourceId === "comick") {
+          throw new ConflictException("Cannot overwrite the primary source for this provider.");
+        }
+        const oldSourceChapters = await tx.sourceChapter.findMany({
+          where: { sourceTitleId: existingForProvider.id },
+          select: { chapterId: true },
+        });
+        if (oldSourceChapters.length > 0) {
+          await tx.chapter.deleteMany({
+            where: {
+              id: { in: oldSourceChapters.map((sc: { chapterId: string }) => sc.chapterId) },
+              images: { none: {} },
+            },
+          });
+        }
+        await tx.sourceTitle.delete({ where: { id: existingForProvider.id } });
+      }
+
+      const row = await tx.sourceTitle.upsert({
+        where: { sourceId_externalId: { sourceId: dto.sourceId, externalId: dto.externalId } },
+        update: {
+          title: details.title,
+          sourceUrl: details.sourceUrl,
+          coverUrl: details.coverUrl,
+          contentType: validContentType,
+          state: "APPROVED",
+          comicId,
+          reviewedById: actorId,
+          reviewedAt: new Date(),
+        },
+        create: {
+          sourceId: dto.sourceId,
+          externalId: dto.externalId,
+          title: details.title,
+          sourceUrl: details.sourceUrl,
+          coverUrl: details.coverUrl,
+          contentType: validContentType,
+          state: "APPROVED",
+          comicId,
+          reviewedById: actorId,
+          reviewedAt: new Date(),
+        },
+      });
+      await this.db.setSourceTitleRole(row.id, "CHAPTER_FALLBACK", tx);
+
+      if (previousComic) {
+        const remainingForPrevious = await tx.sourceTitle.count({
+          where: { comicId: previousComic.id },
+        });
+        if (remainingForPrevious === 0) {
+          const archivedSlug = previousComic.slug.includes("-deleted-")
+            ? previousComic.slug
+            : `${previousComic.slug.slice(0, 160)}-deleted-${previousComic.id.slice(-8)}-${Date.now().toString(36)}`;
+          await tx.comic.update({
+            where: { id: previousComic.id },
+            data: {
+              deletedAt: new Date(),
+              publishState: "ARCHIVED",
+              slug: archivedSlug,
+            },
+          });
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "source.fallback.link",
+          resource: "Comic",
+          resourceId: comicId,
+          meta: { sourceId: dto.sourceId, externalId: dto.externalId, sourceTitleId: row.id, title: details.title, role: "CHAPTER_FALLBACK" },
+        },
+      });
+
+      return row;
+    });
+
+    return {
+      id: linked.sourceId,
+      sourceId: linked.sourceId,
+      externalId: linked.externalId,
+      title: linked.title,
+      sourceUrl: linked.sourceUrl,
+      coverUrl: linked.coverUrl,
+      contentType: linked.contentType,
+      state: linked.state,
+      role: "CHAPTER_FALLBACK" as const,
+      displayName,
+    };
+  }
+
+  /**
+   * DELETE /admin/sources/comics/:id/fallbacks/:sourceId
+   * Unlinks a CHAPTER_FALLBACK source from the comic and removes its source-backed chapters.
+   */
+  async unlinkFallbackSource(comicId: string, sourceId: string, actorId: string) {
+    const candidates = await this.db.sourceTitle.findMany({
+      where: { comicId, sourceId },
+    });
+    const roleMap = await this.db.getSourceTitleRolesByIds(candidates.map((c) => c.id));
+    const fallback = candidates.find((c) => roleMap.get(c.id) === "CHAPTER_FALLBACK" || c.sourceId !== "comick");
+    if (!fallback) throw new NotFoundException("Fallback source not found for this comic.");
+
+    await this.db.$transaction(async (tx) => {
+      const linkedChapters = await tx.sourceChapter.findMany({
+        where: { sourceTitleId: fallback.id },
+        select: { chapterId: true },
+      });
+      if (linkedChapters.length > 0) {
+        await tx.chapter.deleteMany({
+          where: {
+            id: { in: linkedChapters.map((sc: { chapterId: string }) => sc.chapterId) },
+            images: { none: {} },
+          },
+        });
+      }
+      await tx.sourceTitle.delete({ where: { id: fallback.id } });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "source.fallback.unlink",
+          resource: "Comic",
+          resourceId: comicId,
+          meta: { sourceId, externalId: fallback.externalId, sourceTitleId: fallback.id },
+        },
+      });
+    });
+
+    await this.invalidateComicCaches();
   }
 
   async importAlternativeChaptersForComic(
@@ -707,136 +1254,12 @@ export class SourcesService {
     if (!ALTERNATIVE_PROVIDER_IDS.includes(altSourceId as typeof ALTERNATIVE_PROVIDER_IDS[number])) {
       throw new BadRequestException("Unsupported alternative chapter source.");
     }
-    const comic = await this.db.comic.findFirst({
-      where: { id: comicId, deletedAt: null },
-      include: { sourceTitle: true },
-    });
-    if (!comic) throw new NotFoundException("Comic not found.");
-
-    const [altDetails, altChapters] = await Promise.all([
-      this.providerDetails(altSourceId, altExternalId).catch(() => null),
-      this.providerChapters(altSourceId, altExternalId, q),
-    ]);
-
-    const altTitleRow = await this.ensureApprovedAlternativeSourceTitle({
-      sourceId: altSourceId,
-      externalId: altExternalId,
-      title: altDetails?.title ?? comic.title,
-      sourceUrl: altDetails?.sourceUrl ?? this.providers.get(altSourceId)?.info().officialUrl ?? "",
-      coverUrl: altDetails?.coverUrl ?? comic.externalCoverUrl ?? null,
-      contentType: altDetails?.contentType ?? comic.sourceTitle?.contentType ?? "manga",
-    });
-
-    const orderedItems = [...altChapters.items].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
-    const result = await this.db.$transaction(async (tx) => {
-      const existingChapters = await tx.chapter.findMany({
-        where: { comicId, deletedAt: null },
-        include: { sourceChapter: { include: { sourceTitle: true } } },
-        orderBy: { number: "asc" },
-      });
-      let nextNumber = (existingChapters.reduce((max: number, ch: { number: number }) => Math.max(max, ch.number), 0)) + 1;
-      let importedCount = 0;
-      let linkedCount = 0;
-      const seenIds = new Set<string>();
-
-      for (const item of orderedItems) {
-        if (!item?.id || seenIds.has(item.id)) continue;
-        seenIds.add(item.id);
-
-        const alreadyExistsOnAlt = await tx.sourceChapter.findUnique({
-          where: { sourceTitleId_externalId: { sourceTitleId: altTitleRow.id, externalId: item.id } },
-          select: { id: true },
-        });
-        if (alreadyExistsOnAlt) continue;
-
-        const matchingExisting = existingChapters.find((ch: any) => {
-          const existingLabel = ch.sourceChapter?.numberLabel ?? String(ch.number);
-          return chapterNumbersMatch(item.numberLabel, item.number, existingLabel, ch.number);
-        });
-
-        if (matchingExisting && matchingExisting.sourceChapter && matchingExisting.sourceChapter.sourceTitle.sourceId === "comick") {
-          await tx.sourceChapter.update({
-            where: { id: matchingExisting.sourceChapter.id },
-            data: {
-              sourceTitleId: altTitleRow.id,
-              externalId: item.id,
-              numberLabel: item.numberLabel ?? matchingExisting.sourceChapter.numberLabel,
-              title: item.title ?? matchingExisting.sourceChapter.title,
-              volume: item.volume ?? matchingExisting.sourceChapter.volume,
-              sourceUrl: item.sourceUrl,
-              language: item.language,
-              publishedAt: safeDate(item.publishedAt) ?? matchingExisting.sourceChapter.publishedAt,
-              pageCount: item.pageCount,
-              groups: item.groups,
-            },
-          });
-          linkedCount++;
-          continue;
-        }
-
-        const desiredNumber =
-          item.number !== null && !Number.isNaN(item.number) && !existingChapters.some((c: { number: number }) => Math.abs(c.number - item.number!) < 0.001)
-            ? item.number
-            : nextNumber++;
-
-        const created = await tx.chapter.create({
-          data: {
-            comicId,
-            number: desiredNumber,
-            title: chapterTitle(item),
-            publishState: "PUBLISHED",
-            publishedAt: safeDate(item.publishedAt) ?? new Date(),
-            sourceChapter: {
-              create: {
-                sourceTitleId: altTitleRow.id,
-                externalId: item.id,
-                numberLabel: item.numberLabel,
-                title: item.title,
-                volume: item.volume,
-                sourceUrl: item.sourceUrl,
-                language: item.language,
-                publishedAt: safeDate(item.publishedAt),
-                pageCount: item.pageCount,
-                groups: item.groups,
-              },
-            },
-          },
-          include: { sourceChapter: { include: { sourceTitle: true } } },
-        });
-        existingChapters.push(created);
-        importedCount++;
-      }
-
-      if (importedCount > 0 || linkedCount > 0) {
-        await tx.comic.update({ where: { id: comicId }, data: { updatedAt: new Date() } });
-      }
-      await tx.auditLog.create({
-        data: {
-          actorId,
-          action: "source.title.alternative_chapters_import",
-          resource: "Comic",
-          resourceId: comicId,
-          meta: {
-            alternativeSourceId: altSourceId,
-            alternativeExternalId: altExternalId,
-            imported: importedCount,
-            linkedExisting: linkedCount,
-          },
-        },
-      });
-      return { imported: importedCount, linkedExisting: linkedCount };
-    });
-
-    if (result.imported > 0 || result.linkedExisting > 0) await this.invalidateComicCaches();
-    return {
-      ...result,
-      sourceId: altSourceId,
-      externalId: altExternalId,
-      total: altChapters.total,
-      page: altChapters.page,
-      limit: altChapters.limit,
-      hasMore: altChapters.hasMore,
-    };
+    await this.linkFallbackSource(
+      comicId,
+      { sourceId: altSourceId as "weebcentral" | "asurascans", externalId: altExternalId },
+      actorId,
+    );
+    return this.importChapterPage(altSourceId, altExternalId, q, actorId);
   }
 
   async approve(
@@ -846,19 +1269,20 @@ export class SourcesService {
     actorId: string,
     opts?: { chapterSourceId?: string; chapterExternalId?: string },
   ) {
-    const pageLimit = sourceId === "comick" ? 20 : DEFAULT_CHAPTER_LIMIT;
+    const isComick = sourceId === "comick";
+    const pageLimit = isComick ? 20 : DEFAULT_CHAPTER_LIMIT;
+
     const [detailsResult, chapterResult] = await Promise.allSettled([
       this.resolveDetailsWithDbFallback(sourceId, externalId),
-      this.providerChapters(sourceId, externalId, {
-        language, page: 1, limit: pageLimit,
-      }),
+      isComick
+        ? Promise.resolve<ChaptersResponse>({ items: [], total: 0, page: 1, limit: 20, hasMore: false })
+        : this.providerChapters(sourceId, externalId, { language, page: 1, limit: pageLimit }),
     ]);
 
     let chapterPage: ChaptersResponse;
     if (chapterResult.status === "fulfilled") {
       chapterPage = chapterResult.value;
     } else if (detailsResult.status === "fulfilled") {
-      this.log.warn(`Chapter fetch during approval of ${sourceId}:${externalId} failed; checking alternative chapter sources: ${(chapterResult.reason as Error)?.message}`);
       chapterPage = { items: [], total: 0, page: 1, limit: pageLimit, hasMore: false };
     } else {
       throw detailsResult.reason;
@@ -894,8 +1318,6 @@ export class SourcesService {
       };
     }
 
-    // Determine whether chapters should be sourced from an alternative provider (WeebCentral or Asura Scans)
-    // while strictly preserving the alternative provider's own sourceId, externalId, chapter IDs, and URLs.
     let chapterSourceMeta: {
       sourceId: string;
       externalId: string;
@@ -913,43 +1335,40 @@ export class SourcesService {
       chapterSourceMeta = {
         sourceId: opts.chapterSourceId,
         externalId: opts.chapterExternalId,
-        title: altDetails?.title ?? details.title,
+        title: (altDetails?.title ?? details.title).replace(/^Official\s+/i, "").trim() || details.title,
         sourceUrl: altDetails?.sourceUrl ?? this.providers.get(opts.chapterSourceId)?.info().officialUrl ?? details.sourceUrl,
         coverUrl: altDetails?.coverUrl ?? details.coverUrl,
       };
-    } else if (sourceId === "comick") {
-      // Automatically search WeebCentral and Asura Scans when approving a ComicK title
-      // if ComicK chapters are unavailable or lack direct page images.
-      const alternatives = await this.findAlternativeSources(
-        [details.title, ...details.alternativeTitles],
-        language,
-      );
-      if (alternatives.length > 0) {
-        const chosen = alternatives[0];
-        chapterPage = {
-          items: chosen.chapters,
-          total: chosen.totalChapters,
+    } else if (isComick) {
+      // Automatically find a matching series on WeebCentral or Asura Scans so approving a ComicK title
+      // links its fallback source and imports chapters in 1 click without requiring 4 manual steps.
+      const candidateTitles = [details.title, ...(details.alternativeTitles ?? [])].filter(Boolean);
+      const autoMatches = await this.findAlternativeSources(candidateTitles, language).catch(() => []);
+      const bestMatch = autoMatches[0];
+      if (bestMatch) {
+        const altChapters = await this.providerChapters(bestMatch.sourceId, bestMatch.externalId, {
+          language,
           page: 1,
-          limit: chosen.chapters.length || DEFAULT_CHAPTER_LIMIT,
-          hasMore: chosen.totalChapters > chosen.chapters.length,
-        };
+          limit: DEFAULT_CHAPTER_LIMIT,
+        }).catch(() => null);
+        if (altChapters) {
+          chapterPage = altChapters;
+        }
         chapterSourceMeta = {
-          sourceId: chosen.sourceId,
-          externalId: chosen.externalId,
-          title: chosen.title,
-          sourceUrl: chosen.sourceUrl,
-          coverUrl: chosen.coverUrl,
+          sourceId: bestMatch.sourceId,
+          externalId: bestMatch.externalId,
+          title: bestMatch.title.replace(/^Official\s+/i, "").trim() || details.title,
+          sourceUrl: bestMatch.sourceUrl || details.sourceUrl,
+          coverUrl: bestMatch.coverUrl ?? details.coverUrl,
         };
       }
     }
 
-    const type = CONTENT_TYPES[details.contentType] ?? (details.contentType === "unknown" ? ComicType.MANGA : undefined);
-    if (!type) throw new BadRequestException("This source title has no supported manga, manhwa or manhua type.");
-    const resolvedContentType = details.contentType === "unknown" ? "manga" : details.contentType;
+    const type = CONTENT_TYPES[details.contentType] ?? ComicType.MANGA;
+    const resolvedContentType = CONTENT_TYPES[details.contentType] ? details.contentType : "manga";
     const releaseYear = details.year && details.year >= 1900 && details.year <= 2100 ? details.year : new Date().getFullYear();
     const slugBase = `${slugify(details.title) || "comic"}-${sourceId}-${externalId.slice(0, 8)}`;
 
-    // Deduplicate chapters by externalId so repeated items in one page cannot cause P2002 conflicts.
     const uniqueChapters: ChapterItem[] = [];
     const seenChapterIds = new Set<string>();
     for (const item of chapterPage.items) {
@@ -962,39 +1381,144 @@ export class SourcesService {
       const result = await this.db.$transaction(async (tx) => {
         const existing = await tx.sourceTitle.findUnique({
           where: { sourceId_externalId: { sourceId, externalId } },
-          include: { comic: { select: { id: true, deletedAt: true } } },
+          include: { comic: { select: { id: true, slug: true, deletedAt: true, publishState: true } } },
         });
         if (existing?.comicId && existing.comic && existing.comic.deletedAt === null) {
           throw new ConflictException("This title is already linked to a ComicVerse comic. Use republish if it is unpublished.");
         }
         if (existing) await tx.sourceTitle.delete({ where: { id: existing.id } });
-        let slug = slugBase, suffix = 2;
-        while (await tx.comic.findUnique({ where: { slug }, select: { id: true } })) slug = `${slugBase}-${suffix++}`;
+
+        // Clean up any existing active or soft-deleted duplicate comics with the same title or base slug
+        // so re-adding a deleted comic never leaves multiple published copies on the home page.
+        const cleanComicTitle =
+          details.title.replace(/^Official\s+/i, "").trim().slice(0, 200) ||
+          details.title.slice(0, 200).trim() ||
+          `Title ${externalId}`;
+        const targetNormKey = normalizeMatchText(cleanComicTitle).replace(/\s+/g, "");
+        const candidateDups = await tx.comic.findMany({
+          where: {
+            OR: [
+              { deletedAt: null },
+              { deletedAt: { not: null }, slug: { startsWith: slugBase } },
+            ],
+          },
+          select: { id: true, title: true, slug: true, deletedAt: true },
+        });
+        const duplicateComics = (candidateDups ?? []).filter((c: { id: string; title: string; slug: string; deletedAt: Date | null }) => {
+          if (c.deletedAt !== null) return c.slug.startsWith(slugBase);
+          const key = normalizeMatchText(c.title).replace(/\s+/g, "");
+          return !!targetNormKey && key === targetNormKey;
+        });
+        if (duplicateComics.length > 0) {
+          const dupIds = duplicateComics.map((c: { id: string }) => c.id);
+          await tx.sourceTitle.deleteMany({ where: { comicId: { in: dupIds } } });
+          const now = new Date();
+          await tx.chapter.updateMany({
+            where: { comicId: { in: dupIds }, deletedAt: null },
+            data: { deletedAt: now, publishState: "ARCHIVED" },
+          });
+          for (const dup of duplicateComics) {
+            const archivedSlug = dup.slug.includes("-deleted-")
+              ? dup.slug
+              : `${dup.slug.slice(0, 160)}-deleted-${dup.id.slice(-8)}-${Date.now().toString(36)}`;
+            await tx.comic.update({
+              where: { id: dup.id },
+              data: {
+                deletedAt: dup.deletedAt ?? now,
+                publishState: "ARCHIVED",
+                slug: archivedSlug,
+              },
+            });
+          }
+        }
+
+        let slug = slugBase;
+        let suffix = 2;
+        while (await tx.comic.findUnique({ where: { slug }, select: { id: true } })) {
+          slug = `${slugBase}-${suffix++}`;
+        }
+
+        const safeTitle = (details.title || cleanComicTitle).slice(0, 200);
         const comic = await tx.comic.create({
           data: {
-            slug, title: details.title.slice(0, 200), altTitle: details.alternativeTitles[0]?.slice(0, 200) ?? null,
+            slug,
+            title: safeTitle,
+            altTitle: details.alternativeTitles?.[0]?.slice(0, 200) ?? null,
             description: (details.description ?? "No description provided.").slice(0, 5000),
-            author: (details.authors.join(", ") || "Unknown").slice(0, 120), artist: (details.artists.join(", ") || "Unknown").slice(0, 120),
-            type, status: details.status === "completed" ? ComicStatus.COMPLETED : details.status === "hiatus" ? ComicStatus.HIATUS : ComicStatus.ONGOING,
-            publishState: "PUBLISHED", releaseYear, externalCoverUrl: details.coverUrl,
+            author: ((details.authors ?? []).join(", ") || "Unknown").slice(0, 120),
+            artist: ((details.artists ?? []).join(", ") || "Unknown").slice(0, 120),
+            type,
+            status:
+              details.status === "completed"
+                ? ComicStatus.COMPLETED
+                : details.status === "hiatus"
+                ? ComicStatus.HIATUS
+                : ComicStatus.ONGOING,
+            publishState: "PUBLISHED",
+            releaseYear,
+            externalCoverUrl: details.coverUrl ?? chapterSourceMeta?.coverUrl ?? null,
           },
         });
+
         const sourceTitle = await tx.sourceTitle.upsert({
           where: { sourceId_externalId: { sourceId, externalId } },
-          update: { title: details.title, sourceUrl: details.sourceUrl, coverUrl: details.coverUrl, contentType: resolvedContentType, state: "APPROVED", comicId: comic.id, reviewedById: actorId, reviewedAt: new Date(), reviewNote: null },
-          create: { sourceId, externalId, title: details.title, sourceUrl: details.sourceUrl, coverUrl: details.coverUrl, contentType: resolvedContentType, state: "APPROVED", comicId: comic.id, reviewedById: actorId, reviewedAt: new Date() },
+          update: {
+            title: safeTitle,
+            sourceUrl: details.sourceUrl || `https://${sourceId}.com`,
+            coverUrl: details.coverUrl ?? null,
+            contentType: resolvedContentType,
+            state: "APPROVED",
+            comicId: comic.id,
+            reviewedById: actorId,
+            reviewedAt: new Date(),
+            reviewNote: null,
+          },
+          create: {
+            sourceId,
+            externalId,
+            title: safeTitle,
+            sourceUrl: details.sourceUrl || `https://${sourceId}.com`,
+            coverUrl: details.coverUrl ?? null,
+            contentType: resolvedContentType,
+            state: "APPROVED",
+            comicId: comic.id,
+            reviewedById: actorId,
+            reviewedAt: new Date(),
+          },
         });
+        await this.db.setSourceTitleRole(sourceTitle.id, "PRIMARY", tx);
 
         let targetChapterSourceTitleId = sourceTitle.id;
         if (chapterSourceMeta) {
+          // If the fallback SourceTitle already existed for a deleted/previous comic, remove it first
+          // so its stale SourceChapter rows don't block importing chapters onto the new comic.
+          const prevAlt = await tx.sourceTitle.findUnique({
+            where: {
+              sourceId_externalId: {
+                sourceId: chapterSourceMeta.sourceId,
+                externalId: chapterSourceMeta.externalId,
+              },
+            },
+            select: { id: true, comicId: true },
+          });
+          if (prevAlt && prevAlt.comicId !== comic.id) {
+            await tx.sourceTitle.delete({ where: { id: prevAlt.id } });
+          }
+
           const altSourceTitle = await tx.sourceTitle.upsert({
-            where: { sourceId_externalId: { sourceId: chapterSourceMeta.sourceId, externalId: chapterSourceMeta.externalId } },
+            where: {
+              sourceId_externalId: {
+                sourceId: chapterSourceMeta.sourceId,
+                externalId: chapterSourceMeta.externalId,
+              },
+            },
             update: {
               title: chapterSourceMeta.title,
               sourceUrl: chapterSourceMeta.sourceUrl,
               coverUrl: chapterSourceMeta.coverUrl,
               contentType: resolvedContentType,
               state: "APPROVED",
+              comicId: comic.id,
               reviewedById: actorId,
               reviewedAt: new Date(),
             },
@@ -1006,32 +1530,58 @@ export class SourcesService {
               coverUrl: chapterSourceMeta.coverUrl,
               contentType: resolvedContentType,
               state: "APPROVED",
+              comicId: comic.id,
               reviewedById: actorId,
               reviewedAt: new Date(),
             },
           });
+          await this.db.setSourceTitleRole(altSourceTitle.id, "CHAPTER_FALLBACK", tx);
           targetChapterSourceTitleId = altSourceTitle.id;
         }
 
+        const usedNumbers = new Set<number>();
+        const nextSequentialRef = { value: 1 };
         let importedChaptersCount = 0;
-        for (const [index, item] of uniqueChapters.entries()) {
+
+        for (const item of uniqueChapters) {
           const existingSourceCh = await tx.sourceChapter.findUnique({
-            where: { sourceTitleId_externalId: { sourceTitleId: targetChapterSourceTitleId, externalId: item.id } },
+            where: {
+              sourceTitleId_externalId: {
+                sourceTitleId: targetChapterSourceTitleId,
+                externalId: item.id,
+              },
+            },
             select: { id: true },
           });
           if (existingSourceCh) continue;
+
+          const chapterNum = allocateUniqueChapterNumber(item, usedNumbers, nextSequentialRef);
           await tx.chapter.create({
             data: {
-              comicId: comic.id, number: index + 1, title: chapterTitle(item), publishState: "PUBLISHED", publishedAt: safeDate(item.publishedAt) ?? new Date(),
-              sourceChapter: { create: {
-                sourceTitleId: targetChapterSourceTitleId, externalId: item.id, numberLabel: item.numberLabel, title: item.title,
-                volume: item.volume, sourceUrl: item.sourceUrl, language: item.language, publishedAt: safeDate(item.publishedAt),
-                pageCount: item.pageCount, groups: item.groups,
-              } },
+              comicId: comic.id,
+              number: chapterNum,
+              title: chapterTitle(item),
+              publishState: "PUBLISHED",
+              publishedAt: safeDate(item.publishedAt),
+              sourceChapter: {
+                create: {
+                  sourceTitleId: targetChapterSourceTitleId,
+                  externalId: item.id,
+                  numberLabel: item.numberLabel,
+                  title: item.title,
+                  volume: item.volume,
+                  sourceUrl: item.sourceUrl || details.sourceUrl,
+                  language: item.language ?? language ?? "en",
+                  publishedAt: safeDate(item.publishedAt),
+                  pageCount: item.pageCount,
+                  groups: item.groups ?? [],
+                },
+              },
             },
           });
           importedChaptersCount++;
         }
+
         await tx.auditLog.create({
           data: {
             actorId,
@@ -1041,8 +1591,9 @@ export class SourcesService {
             meta: {
               sourceId,
               externalId,
-              chapterSourceId: chapterSourceMeta?.sourceId ?? sourceId,
-              chapterExternalId: chapterSourceMeta?.externalId ?? externalId,
+              role: "PRIMARY",
+              chapterSourceId: chapterSourceMeta?.sourceId ?? (isComick ? null : sourceId),
+              chapterExternalId: chapterSourceMeta?.externalId ?? (isComick ? null : externalId),
               importedChapters: importedChaptersCount,
             },
           },
@@ -1052,14 +1603,24 @@ export class SourcesService {
           slug: comic.slug,
           importedChapters: importedChaptersCount,
           hasMoreChapters: chapterPage.hasMore,
-          chapterSourceId: chapterSourceMeta?.sourceId ?? sourceId,
-          chapterExternalId: chapterSourceMeta?.externalId ?? externalId,
+          requiresFallback: isComick && !chapterSourceMeta,
         };
-      });
+      }, { maxWait: 15_000, timeout: 60_000 });
       await this.invalidateComicCaches();
       return result;
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") throw new ConflictException("This source title or one of its chapters is already published.");
+      if (e instanceof ConflictException || e instanceof BadRequestException || e instanceof NotFoundException) {
+        this.recordPublishError(sourceId, externalId, "approve", "CONFLICT_OR_VALIDATION", (e as Error).message);
+        throw e;
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError) {
+        this.recordPublishError(sourceId, externalId, "approve", e.code, e.message);
+        if (e.code === "P2002") {
+          throw new ConflictException("This source title or one of its chapters is already published.");
+        }
+      } else {
+        this.recordPublishError(sourceId, externalId, "approve", "UNEXPECTED_ERROR", (e as Error)?.message ?? "Unknown error");
+      }
       throw e;
     }
   }
@@ -1115,40 +1676,935 @@ export class SourcesService {
     await this.invalidateComicCaches();
   }
 
-  async importChapterPage(sourceId: string, externalId: string, q: { language: string; page: number; limit: number }, actorId: string) {
+  /**
+   * POST /admin/sources/catalog/:sourceId/:externalId/chapters/import
+   * Imports chapters (either the selected chapterIds or all unimported chapters on the page)
+   * from an approved PRIMARY or CHAPTER_FALLBACK SourceTitle, storing each chapter with
+   * that provider's own SourceTitle relationship and externalId.
+   */
+  async importChapterPage(
+    sourceId: string,
+    externalId: string,
+    q: { language: string; page: number; limit: number },
+    actorId: string,
+    selectedChapterIds?: string[],
+  ) {
+    if (sourceId === "comick") {
+      throw new BadRequestException("ComicK chapters cannot be imported directly. Link WeebCentral or Asura Scans as an alternative chapter source.");
+    }
     const title = await this.db.sourceTitle.findUnique({
       where: { sourceId_externalId: { sourceId, externalId } },
-      include: { comic: { select: { id: true } } },
+      include: { comic: { select: { id: true, slug: true } } },
     });
     const comicId = title?.comicId;
-    if (!comicId || !title.comic) throw new NotFoundException("Approved title not found.");
+    if (!comicId || !title.comic) throw new NotFoundException("Approved or linked source title not found.");
+    const roleMap = await this.db.getSourceTitleRolesByIds([title.id]);
+
     const result = await this.providerChapters(sourceId, externalId, q);
+    const filterSet = selectedChapterIds && selectedChapterIds.length > 0 ? new Set(selectedChapterIds) : null;
+    const candidates = filterSet
+      ? result.items.filter((item) => filterSet.has(item.id))
+      : result.items;
+
+    const orderedCandidates = [...candidates].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+
     const imported = await this.db.$transaction(async (tx) => {
-      let next = ((await tx.chapter.aggregate({ where: { comicId, deletedAt: null }, _max: { number: true } }))._max.number ?? 0) + 1;
+      if (typeof (tx.chapter as any).deleteMany === "function") {
+        await tx.chapter.deleteMany({ where: { comicId, deletedAt: { not: null } } }).catch(() => {});
+      }
+      const existingChapters = await tx.chapter.findMany({
+        where: { comicId, deletedAt: null },
+        include: { sourceChapter: { include: { sourceTitle: true } } },
+        orderBy: { number: "asc" },
+      });
+      const usedNumbers = new Set<number>(existingChapters.map((ch: { number: number }) => ch.number));
+      const maxExisting = existingChapters.reduce((max: number, ch: { number: number }) => Math.max(max, ch.number), 0);
+      const nextSequentialRef = { value: Math.floor(maxExisting) + 1 };
       let count = 0;
+      const newlyCreatedIds: string[] = [];
       const seenInBatch = new Set<string>();
-      for (const item of result.items) {
+
+      for (const item of orderedCandidates) {
         if (!item?.id || seenInBatch.has(item.id)) continue;
         seenInBatch.add(item.id);
-        const exists = await tx.sourceChapter.findUnique({ where: { sourceTitleId_externalId: { sourceTitleId: title.id, externalId: item.id } }, select: { chapterId: true } });
-        if (exists) continue;
-        await tx.chapter.create({
-          data: {
-            comicId, number: next++, title: chapterTitle(item), publishState: "PUBLISHED", publishedAt: safeDate(item.publishedAt) ?? new Date(),
-            sourceChapter: { create: {
-              sourceTitleId: title.id, externalId: item.id, numberLabel: item.numberLabel, title: item.title,
-              volume: item.volume, sourceUrl: item.sourceUrl, language: item.language, publishedAt: safeDate(item.publishedAt),
-              pageCount: item.pageCount, groups: item.groups,
-            } },
-          },
+
+        const exists = await tx.sourceChapter.findUnique({
+          where: { sourceTitleId_externalId: { sourceTitleId: title.id, externalId: item.id } },
+          select: { chapterId: true },
         });
+        if (exists) continue;
+
+        const matchingComickChapter = existingChapters.find((ch: any) => {
+          if (!ch.sourceChapter || ch.sourceChapter.sourceTitle.sourceId !== "comick") return false;
+          const existingLabel = ch.sourceChapter.numberLabel ?? String(ch.number);
+          return chapterNumbersMatch(item.numberLabel, item.number, existingLabel, ch.number);
+        });
+
+        if (matchingComickChapter && matchingComickChapter.sourceChapter) {
+          await tx.sourceChapter.update({
+            where: { id: matchingComickChapter.sourceChapter.id },
+            data: {
+              sourceTitleId: title.id,
+              externalId: item.id,
+              numberLabel: item.numberLabel,
+              title: item.title,
+              volume: item.volume,
+              sourceUrl: item.sourceUrl,
+              language: item.language,
+              publishedAt: safeDate(item.publishedAt),
+              pageCount: item.pageCount,
+              groups: item.groups,
+            },
+          });
+          matchingComickChapter.sourceChapter.sourceTitle = title;
+          matchingComickChapter.sourceChapter.externalId = item.id;
+          count++;
+          continue;
+        }
+
+        const desiredNumber = allocateUniqueChapterNumber(item, usedNumbers, nextSequentialRef);
+
+        const created = await tx.chapter.create({
+          data: {
+            comicId,
+            number: desiredNumber,
+            title: chapterTitle(item),
+            publishState: "PUBLISHED",
+            publishedAt: safeDate(item.publishedAt),
+            sourceChapter: {
+              create: {
+                sourceTitleId: title.id,
+                externalId: item.id,
+                numberLabel: item.numberLabel,
+                title: item.title,
+                volume: item.volume,
+                sourceUrl: item.sourceUrl,
+                language: item.language,
+                publishedAt: safeDate(item.publishedAt),
+                pageCount: item.pageCount,
+                groups: item.groups,
+              },
+            },
+          },
+          include: { sourceChapter: { include: { sourceTitle: true } } },
+        });
+        existingChapters.push(created);
+        newlyCreatedIds.push(created.id);
         count++;
       }
       if (count) await tx.comic.update({ where: { id: comicId }, data: { updatedAt: new Date() } });
-      await tx.auditLog.create({ data: { actorId, action: "source.title.chapters_import", resource: "SourceTitle", resourceId: title.id, meta: { page: q.page, language: q.language, importedChapters: count } } });
-      return count;
-    });
-    if (imported) await this.invalidateComicCaches();
-    return { imported, hasMore: result.hasMore, total: result.total, page: result.page, limit: result.limit };
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "source.title.chapters_import",
+          resource: "SourceTitle",
+          resourceId: title.id,
+          meta: {
+            sourceId,
+            externalId,
+            role: roleMap.get(title.id) ?? "PRIMARY",
+            page: q.page,
+            language: q.language,
+            selectedCount: filterSet ? filterSet.size : null,
+            importedChapters: count,
+          },
+        },
+      });
+      return { count, newlyCreatedIds };
+    }, { maxWait: 15_000, timeout: 60_000 });
+    if (imported.count) {
+      await this.invalidateComicCaches();
+      for (const chId of imported.newlyCreatedIds) {
+        void this.notifications?.notifyNewChapter(comicId, chId, { providerId: sourceId }).catch(() => undefined);
+      }
+    }
+    return {
+      imported: imported.count,
+      hasMore: result.hasMore,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      sourceId,
+      externalId,
+    };
   }
+
+  // ---- PART 2 & PART 4: Existing Comic Chapter Repair & Automatic New Chapter Synchronization ----
+
+  private repairConflicts: Array<{
+    at: string;
+    comicId: string;
+    comicTitle: string;
+    sourceId: string;
+    externalId: string;
+    chapterId: string;
+    chapterExternalId: string;
+    currentNumber: number;
+    targetNumber: number;
+    conflictingChapterId: string;
+    reason: string;
+  }> = [];
+
+  private failedChapterImports: Array<{
+    at: string;
+    comicId: string;
+    comicTitle: string;
+    comicSlug: string;
+    sourceTitleId: string;
+    sourceId: string;
+    sourceName: string;
+    externalId: string;
+    chapterExternalId: string;
+    number: number | null;
+    numberLabel: string | null;
+    originalLabel: string | null;
+    title: string | null;
+    publishedAt: string | null;
+    sourceUrl: string;
+    reason: string;
+  }> = [];
+
+  private syncHistory: Array<{
+    at: string;
+    checkedComics: number;
+    repairedChapters: number;
+    publishedChapters: number;
+    failedChapters: number;
+    conflicts: number;
+    durationMs: number;
+  }> = [];
+
+  getRepairConflicts() {
+    return [...this.repairConflicts].reverse();
+  }
+
+  getFailedChapterImports() {
+    return [...this.failedChapterImports].reverse();
+  }
+
+  getSyncStatus() {
+    const cfg = loadSourceSyncConfig();
+    return {
+      config: cfg,
+      recentRuns: [...this.syncHistory].reverse().slice(0, 20),
+      conflicts: this.getRepairConflicts().slice(0, 50),
+      failedImports: this.getFailedChapterImports().slice(0, 50),
+      providerErrors: this.getRecentProviderErrors().slice(0, 20),
+      publishErrors: this.getRecentPublishErrors().slice(0, 20),
+    };
+  }
+
+  /**
+   * Fetches all chapters across paginated responses from a provider without serving stale cache.
+   */
+  private async fetchAllProviderChaptersFresh(
+    sourceId: string,
+    externalId: string,
+    language = "en",
+  ): Promise<ChapterItem[]> {
+    const provider = await this.available(sourceId);
+    const allItems: ChapterItem[] = [];
+    const seen = new Set<string>();
+    const limit = 500;
+    for (let page = 1; page <= 20; page++) {
+      await this.cache.delete(`src:${sourceId}:chapters:${externalId}:${language}:${page}:${limit}`).catch(() => {});
+      const res = await this.run(sourceId, (p) => p.chapters(externalId, { language, page, limit }));
+      for (const item of res.items) {
+        if (!item?.id || seen.has(item.id)) continue;
+        seen.add(item.id);
+        allItems.push(item);
+      }
+      if (!res.hasMore || res.items.length === 0) break;
+    }
+    return allItems;
+  }
+
+  /**
+   * PART 2: Safe synchronization and correction process for existing published comics.
+   * Repairs WeebCentral/AsuraScans chapter numbers (e.g. "Episode 10" previously stored as Special),
+   * updates source release dates, preserves existing chapter images, reading history, bookmarks,
+   * and logs any chapter number conflict for administrator resolution instead of overwriting blindly.
+   */
+  async synchronizeAndRepairComic(comicId: string, actorId?: string) {
+    const comic = await this.db.comic.findFirst({
+      where: { id: comicId, deletedAt: null },
+      select: { id: true, slug: true, title: true, publishState: true },
+    });
+    if (!comic) throw new NotFoundException("Comic not found.");
+
+    const sourceTitles = await this.db.sourceTitle.findMany({
+      where: {
+        comicId: comic.id,
+        state: "APPROVED",
+        sourceId: { in: ["weebcentral", "asurascans"] },
+      },
+    });
+
+    const existingChapters = await this.db.chapter.findMany({
+      where: { comicId: comic.id, deletedAt: null },
+      include: {
+        sourceChapter: { include: { sourceTitle: true } },
+        _count: { select: { images: true } },
+      },
+      orderBy: { number: "asc" },
+    });
+
+    const catalogBySourceTitle = new Map<string, Map<string, ChapterItem>>();
+    for (const st of sourceTitles) {
+      try {
+        const items = await this.fetchAllProviderChaptersFresh(st.sourceId, st.externalId, "en");
+        catalogBySourceTitle.set(st.id, new Map(items.map((it) => [it.id, it])));
+      } catch (err) {
+        this.log.warn(`Catalog fetch during repair for ${st.sourceId}:${st.externalId} failed: ${(err as Error)?.message}`);
+        catalogBySourceTitle.set(st.id, new Map());
+      }
+    }
+
+    // Determine desired state for each existing chapter
+    interface PlannedUpdate {
+      chapter: (typeof existingChapters)[number];
+      targetNumber: number;
+      targetNumberLabel: string | null;
+      targetOriginalLabel: string | null;
+      targetSourceTitle: string | null;
+      targetChapterTitle: string;
+      targetPublishedAt: Date | null;
+      needsNumberChange: boolean;
+      needsMetaChange: boolean;
+    }
+
+    const plans: PlannedUpdate[] = [];
+    for (const ch of existingChapters) {
+      const sc = ch.sourceChapter;
+      if (!sc) continue;
+      const catMap = catalogBySourceTitle.get(sc.sourceTitleId);
+      const remoteItem = catMap?.get(sc.externalId) ?? null;
+
+      let resolvedNumber: number | null = remoteItem?.number ?? null;
+      let resolvedNumberLabel: string | null = remoteItem?.numberLabel ?? sc.numberLabel ?? null;
+      let resolvedOriginalLabel: string | null =
+        remoteItem?.originalLabel ?? (sc as any).originalLabel ?? sc.numberLabel ?? null;
+      let resolvedSubTitle: string | null = remoteItem ? remoteItem.title : sc.title;
+      const resolvedPublishedAt: Date | null =
+        safeDate(remoteItem?.publishedAt ?? null) ?? sc.publishedAt ?? null;
+
+      // If remote catalogue was unreachable or didn't have numberLabel, inspect stored labels/titles (e.g. "Episode 10")
+      if (resolvedNumber === null) {
+        for (const candidate of [(sc as any).originalLabel, sc.numberLabel, sc.title, ch.title]) {
+          if (!candidate || typeof candidate !== "string") continue;
+          const parsed = parseWeebCentralChapterLabel(candidate);
+          if (parsed.number !== null && Number.isFinite(parsed.number)) {
+            resolvedNumber = parsed.number;
+            resolvedNumberLabel = parsed.numberLabel;
+            resolvedOriginalLabel = parsed.originalLabel ?? candidate;
+            resolvedSubTitle = parsed.title;
+            break;
+          }
+        }
+      }
+
+      const targetNumber =
+        resolvedNumber !== null && Number.isFinite(resolvedNumber) && resolvedNumber >= 0
+          ? resolvedNumber
+          : ch.number;
+
+      const syntheticItem: ChapterItem = {
+        id: sc.externalId,
+        sourceId: sc.sourceTitle?.sourceId ?? "weebcentral",
+        mangaId: sc.sourceTitle?.externalId ?? "",
+        number: resolvedNumber,
+        numberLabel: resolvedNumberLabel,
+        originalLabel: resolvedOriginalLabel,
+        title: resolvedSubTitle,
+        volume: sc.volume,
+        language: sc.language ?? "en",
+        publishedAt: resolvedPublishedAt ? resolvedPublishedAt.toISOString() : null,
+        groups: sc.groups ?? [],
+        pageCount: remoteItem?.pageCount ?? sc.pageCount ?? null,
+        sourceUrl: remoteItem?.sourceUrl || sc.sourceUrl,
+        duplicateNumber: false,
+      };
+
+      const newChapterTitle = chapterTitle(syntheticItem);
+      const needsNumberChange = Math.abs(ch.number - targetNumber) > 0.0001;
+      const currentPubTime = ch.publishedAt ? ch.publishedAt.getTime() : null;
+      const scPubTime = sc.publishedAt ? sc.publishedAt.getTime() : null;
+      const targetPubTime = resolvedPublishedAt ? resolvedPublishedAt.getTime() : null;
+      const needsMetaChange =
+        (resolvedNumberLabel !== null && sc.numberLabel !== resolvedNumberLabel) ||
+        (resolvedSubTitle !== sc.title && (resolvedSubTitle !== null || sc.title !== null)) ||
+        (targetPubTime !== null && scPubTime !== targetPubTime) ||
+        (targetPubTime !== null && currentPubTime !== targetPubTime) ||
+        ch.title !== newChapterTitle;
+
+      plans.push({
+        chapter: ch,
+        targetNumber,
+        targetNumberLabel: resolvedNumberLabel,
+        targetOriginalLabel: resolvedOriginalLabel,
+        targetSourceTitle: resolvedSubTitle,
+        targetChapterTitle: newChapterTitle,
+        targetPublishedAt: resolvedPublishedAt,
+        needsNumberChange,
+        needsMetaChange,
+      });
+    }
+
+    // Detect genuine conflicts:
+    // 1. A manual chapter (no sourceChapter or has uploaded ChapterImage rows) already holds targetNumber
+    // 2. Two different chapters in plans both claim the exact same targetNumber
+    const manualChaptersByNumber = new Map<string, (typeof existingChapters)[number]>();
+    for (const ch of existingChapters) {
+      if (!ch.sourceChapter || (ch._count?.images ?? 0) > 0) {
+        manualChaptersByNumber.set(ch.number.toFixed(4), ch);
+      }
+    }
+
+    const targetClaims = new Map<string, PlannedUpdate[]>();
+    for (const p of plans) {
+      const key = p.targetNumber.toFixed(4);
+      const list = targetClaims.get(key) ?? [];
+      list.push(p);
+      targetClaims.set(key, list);
+    }
+
+    let repairedCount = 0;
+    let conflictsCount = 0;
+    const safeNumberUpdates: PlannedUpdate[] = [];
+    const metaOnlyUpdates: PlannedUpdate[] = [];
+
+    for (const p of plans) {
+      const key = p.targetNumber.toFixed(4);
+      const manualConflict = manualChaptersByNumber.get(key);
+      const claimants = targetClaims.get(key) ?? [];
+
+      if (p.needsNumberChange && manualConflict && manualConflict.id !== p.chapter.id) {
+        conflictsCount++;
+        const conflictEntry = {
+          at: new Date().toISOString(),
+          comicId: comic.id,
+          comicTitle: comic.title,
+          sourceId: p.chapter.sourceChapter?.sourceTitle?.sourceId ?? "weebcentral",
+          externalId: p.chapter.sourceChapter?.sourceTitle?.externalId ?? "",
+          chapterId: p.chapter.id,
+          chapterExternalId: p.chapter.sourceChapter?.externalId ?? "",
+          currentNumber: p.chapter.number,
+          targetNumber: p.targetNumber,
+          conflictingChapterId: manualConflict.id,
+          reason: `Target chapter number ${p.targetNumber} conflicts with existing manual chapter (${manualConflict.id}).`,
+        };
+        this.repairConflicts.push(conflictEntry);
+        if (this.repairConflicts.length > 100) this.repairConflicts.shift();
+        this.log.warn(JSON.stringify({ event: "source.repair.conflict", ...conflictEntry }));
+        if (p.needsMetaChange) metaOnlyUpdates.push(p);
+        continue;
+      }
+
+      if (claimants.length > 1) {
+        // Keep the first claimant whose current number already matches, or the first claimant overall; log conflict for the rest
+        const winner = claimants.find((c) => !c.needsNumberChange) ?? claimants[0];
+        if (winner.chapter.id !== p.chapter.id) {
+          conflictsCount++;
+          const conflictEntry = {
+            at: new Date().toISOString(),
+            comicId: comic.id,
+            comicTitle: comic.title,
+            sourceId: p.chapter.sourceChapter?.sourceTitle?.sourceId ?? "weebcentral",
+            externalId: p.chapter.sourceChapter?.sourceTitle?.externalId ?? "",
+            chapterId: p.chapter.id,
+            chapterExternalId: p.chapter.sourceChapter?.externalId ?? "",
+            currentNumber: p.chapter.number,
+            targetNumber: p.targetNumber,
+            conflictingChapterId: winner.chapter.id,
+            reason: `Multiple source chapters resolve to chapter number ${p.targetNumber} (${p.chapter.sourceChapter?.externalId} vs ${winner.chapter.sourceChapter?.externalId}).`,
+          };
+          this.repairConflicts.push(conflictEntry);
+          if (this.repairConflicts.length > 100) this.repairConflicts.shift();
+          this.log.warn(JSON.stringify({ event: "source.repair.conflict", ...conflictEntry }));
+          if (p.needsMetaChange) metaOnlyUpdates.push(p);
+          continue;
+        }
+      }
+
+      if (p.needsNumberChange) {
+        safeNumberUpdates.push(p);
+      } else if (p.needsMetaChange) {
+        metaOnlyUpdates.push(p);
+      }
+    }
+
+    const updateSourceChapterSafe = async (client: any, id: string, p: PlannedUpdate) => {
+      try {
+        await client.sourceChapter.update({
+          where: { id },
+          data: {
+            numberLabel: p.targetNumberLabel,
+            originalLabel: p.targetOriginalLabel,
+            title: p.targetSourceTitle,
+            ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+          },
+        });
+      } catch {
+        await client.sourceChapter.update({
+          where: { id },
+          data: {
+            numberLabel: p.targetNumberLabel,
+            title: p.targetSourceTitle,
+            ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+          },
+        });
+      }
+    };
+
+    if (safeNumberUpdates.length > 0) {
+      await this.db.$transaction(
+        async (tx) => {
+          // Phase 1: Move chapters whose numbers are changing to temporary high numbers
+          for (let i = 0; i < safeNumberUpdates.length; i++) {
+            const p = safeNumberUpdates[i];
+            await tx.chapter.update({
+              where: { id: p.chapter.id },
+              data: { number: 500_000 + i + (i + 1) * 0.0001 },
+            });
+          }
+          // Phase 2: Set final target numbers, titles, release dates, and SourceChapter metadata
+          for (const p of safeNumberUpdates) {
+            await tx.chapter.update({
+              where: { id: p.chapter.id },
+              data: {
+                number: p.targetNumber,
+                title: p.targetChapterTitle,
+                ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+              },
+            });
+            if (p.chapter.sourceChapter) {
+              await updateSourceChapterSafe(tx, p.chapter.sourceChapter.id, p);
+            }
+            repairedCount++;
+          }
+        },
+        { maxWait: 15_000, timeout: 60_000 },
+      );
+    }
+
+    // Phase 3: Apply metadata-only updates in small batches outside the long interactive transaction
+    // so comics with 200–500 chapters never exceed Prisma's 5,000 ms interactive transaction timeout.
+    if (metaOnlyUpdates.length > 0) {
+      const BATCH = 20;
+      for (let i = 0; i < metaOnlyUpdates.length; i += BATCH) {
+        const slice = metaOnlyUpdates.slice(i, i + BATCH);
+        await Promise.all(
+          slice.map(async (p) => {
+            await this.db.chapter.update({
+              where: { id: p.chapter.id },
+              data: {
+                title: p.targetChapterTitle,
+                ...(p.targetPublishedAt ? { publishedAt: p.targetPublishedAt } : {}),
+              },
+            });
+            if (p.chapter.sourceChapter) {
+              await updateSourceChapterSafe(this.db, p.chapter.sourceChapter.id, p);
+            }
+            repairedCount++;
+          }),
+        );
+      }
+    }
+
+    if (repairedCount > 0) {
+      await this.db.auditLog
+        .create({
+          data: {
+            actorId: actorId ?? null,
+            actorLabel: actorId ? undefined : "source-repair",
+            action: "source.comic.repair_chapters",
+            resource: "Comic",
+            resourceId: comic.id,
+            meta: { repairedChapters: repairedCount, conflicts: conflictsCount },
+          },
+        })
+        .catch(() => undefined);
+      await this.invalidateComicCaches();
+    }
+
+    return {
+      comicId: comic.id,
+      comicTitle: comic.title,
+      repairedChapters: repairedCount,
+      conflicts: conflictsCount,
+    };
+  }
+
+  /**
+   * PART 4: Automatic New Chapter Detection & Publishing Workflow.
+   * Uses a distributed lock so multiple Render workers never duplicate work.
+   */
+  async runAutomaticChapterSync(opts?: { comicId?: string; actorId?: string }) {
+    const syncCfg = loadSourceSyncConfig();
+    if (!this.cfg.enabled) {
+      return {
+        skipped: true,
+        reason: "sources_disabled",
+        checkedComics: 0,
+        repairedChapters: 0,
+        publishedChapters: 0,
+        failedChapters: 0,
+        conflicts: 0,
+      };
+    }
+
+    const acquired = await this.db.tryAcquireSyncLock(72839401, 10 * 60_000);
+    if (!acquired) {
+      this.log.log("Skipping automatic chapter sync: distributed lock is held by another worker.");
+      return {
+        skipped: true,
+        reason: "lock_held",
+        checkedComics: 0,
+        repairedChapters: 0,
+        publishedChapters: 0,
+        failedChapters: 0,
+        conflicts: 0,
+      };
+    }
+
+    const startedAt = Date.now();
+    let checkedComics = 0;
+    let repairedChapters = 0;
+    let publishedChapters = 0;
+    let failedChapters = 0;
+    let totalConflicts = 0;
+
+    try {
+      const settings = await this.settings();
+      const sourceTitles = await this.db.sourceTitle.findMany({
+        where: {
+          state: "APPROVED",
+          sourceId: { in: ["weebcentral", "asurascans"] },
+          ...(opts?.comicId ? { comicId: opts.comicId } : {}),
+          comic: {
+            publishState: "PUBLISHED",
+            deletedAt: null,
+          },
+        },
+        include: {
+          comic: { select: { id: true, slug: true, title: true, publishState: true, deletedAt: true } },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: opts?.comicId ? 10 : syncCfg.batchSize,
+      });
+
+      const repairedComicIds = new Set<string>();
+
+      for (const st of sourceTitles) {
+        if (!st.comic || st.comic.publishState !== "PUBLISHED" || st.comic.deletedAt !== null) continue;
+        const provider = this.providers.get(st.sourceId);
+        if (!provider || settings.get(st.sourceId)?.enabled === false) continue;
+        const providerName = settings.get(st.sourceId)?.displayName ?? provider.displayName;
+
+        checkedComics++;
+
+        // 1. Repair existing chapters on this comic first (Part 2)
+        if (!repairedComicIds.has(st.comic.id)) {
+          repairedComicIds.add(st.comic.id);
+          try {
+            const repairRes = await this.synchronizeAndRepairComic(st.comic.id, opts?.actorId);
+            repairedChapters += repairRes.repairedChapters;
+            totalConflicts += repairRes.conflicts;
+          } catch (err) {
+            this.log.warn(`Chapter repair warning on comic ${st.comic.id}: ${(err as Error)?.message}`);
+          }
+        }
+
+        // 2. Retrieve latest source chapter catalogue
+        let catalogueItems: ChapterItem[];
+        try {
+          catalogueItems = await this.fetchAllProviderChaptersFresh(st.sourceId, st.externalId, "en");
+        } catch (err) {
+          failedChapters++;
+          const msg = err instanceof Error ? err.message : "Provider catalogue unavailable";
+          this.recordPublishError(st.sourceId, st.externalId, "auto_sync_catalogue", "SOURCE_UNAVAILABLE", msg);
+          await this.notifications?.notifyAdminsChapterEvent({
+            comicId: st.comic.id,
+            comicTitle: st.comic.title,
+            comicSlug: st.comic.slug,
+            providerId: st.sourceId,
+            providerName,
+            chapterNumber: null,
+            displayNumber: "Catalogue",
+            status: "FAILED",
+            sourceUrl: st.sourceUrl,
+            errorMessage: msg,
+          });
+          continue;
+        }
+
+        // 3. Compare with existing SourceChapter rows
+        const existingSourceChapters = await this.db.sourceChapter.findMany({
+          where: { sourceTitleId: st.id },
+          select: { externalId: true, chapterId: true },
+        });
+        const knownExternalIds = new Set(existingSourceChapters.map((r: { externalId: string }) => r.externalId));
+        const newItems = catalogueItems
+          .filter((item) => item?.id && !knownExternalIds.has(item.id))
+          .sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
+
+        if (newItems.length === 0) {
+          try {
+            await (this.db.sourceTitle as any).update({
+              where: { id: st.id },
+              data: { lastSyncedAt: new Date(), lastSyncStatus: "OK", lastSyncError: null },
+            });
+          } catch { /* ignore in test mock if column absent */ }
+          continue;
+        }
+
+        // Load current chapters on the comic to check numbers & manual uploads
+        const comicChapters = await this.db.chapter.findMany({
+          where: { comicId: st.comic.id, deletedAt: null },
+          include: {
+            sourceChapter: true,
+            _count: { select: { images: true } },
+          },
+          orderBy: { number: "asc" },
+        });
+        const usedNumbers = new Set<number>(comicChapters.map((c: { number: number }) => c.number));
+        const maxNum = comicChapters.reduce((m: number, c: { number: number }) => Math.max(m, c.number), 0);
+        const nextSequentialRef = { value: Math.floor(maxNum) + 1 };
+
+        for (const item of newItems) {
+          // Validate chapter number or genuine special title
+          const isNumeric = item.number !== null && Number.isFinite(item.number) && item.number >= 0;
+          const isGenuineSpecial = item.number === null && !!item.title && item.title.trim().length > 0;
+          if (!isNumeric && !isGenuineSpecial) {
+            failedChapters++;
+            const reason = `Invalid or missing chapter number for externalId ${item.id}`;
+            this.recordFailedChapterImport(st, providerName, item, reason);
+            await this.notifications?.notifyAdminsChapterEvent({
+              comicId: st.comic.id,
+              comicTitle: st.comic.title,
+              comicSlug: st.comic.slug,
+              providerId: st.sourceId,
+              providerName,
+              externalChapterId: item.id,
+              chapterNumber: null,
+              displayNumber: item.numberLabel ?? "Unknown",
+              originalLabel: item.originalLabel ?? item.numberLabel,
+              chapterTitle: item.title,
+              sourceReleaseDate: safeDate(item.publishedAt),
+              status: "FAILED",
+              sourceUrl: item.sourceUrl || st.sourceUrl,
+              errorMessage: reason,
+            });
+            continue;
+          }
+
+          // Never overwrite manually uploaded chapters
+          if (isNumeric) {
+            const conflictingManual = comicChapters.find(
+              (c: any) => Math.abs(c.number - item.number!) < 0.0001 && (!c.sourceChapter || (c._count?.images ?? 0) > 0),
+            );
+            if (conflictingManual) {
+              totalConflicts++;
+              const reason = `Chapter ${item.number} already exists as a manually uploaded chapter (${conflictingManual.id}). Preserving manual content.`;
+              this.log.warn(reason);
+              continue;
+            }
+          }
+
+          // Retrieve and verify chapter page images before publishing (never publish empty chapters)
+          let pagesData: Awaited<ReturnType<MangaSourceProvider["pages"]>>;
+          try {
+            pagesData = await this.pages(st.sourceId, item.id, "data", st.externalId);
+            if (!pagesData?.pages || pagesData.pages.length === 0) {
+              throw new SourceError("BAD_RESPONSE", "Source returned 0 readable chapter pages.");
+            }
+          } catch (err) {
+            failedChapters++;
+            const reason = err instanceof Error ? err.message : "Failed to retrieve chapter page images.";
+            this.recordFailedChapterImport(st, providerName, item, reason);
+            await this.notifications?.notifyAdminsChapterEvent({
+              comicId: st.comic.id,
+              comicTitle: st.comic.title,
+              comicSlug: st.comic.slug,
+              providerId: st.sourceId,
+              providerName,
+              externalChapterId: item.id,
+              chapterNumber: item.number,
+              displayNumber: item.numberLabel ?? (item.number !== null ? String(item.number) : "Special"),
+              originalLabel: item.originalLabel ?? item.numberLabel,
+              chapterTitle: item.title,
+              sourceReleaseDate: safeDate(item.publishedAt),
+              status: "FAILED",
+              sourceUrl: item.sourceUrl || st.sourceUrl,
+              errorMessage: reason,
+            });
+            continue;
+          }
+
+          // Publish chapter inside a transaction
+          const publishedAtTime = new Date();
+          const sourceReleaseDate = safeDate(item.publishedAt);
+          const chapterNum = allocateUniqueChapterNumber(item, usedNumbers, nextSequentialRef);
+
+          const createdChapter = await this.db.$transaction(async (tx) => {
+            const alreadyImported = await tx.sourceChapter.findUnique({
+              where: { sourceTitleId_externalId: { sourceTitleId: st.id, externalId: item.id } },
+              select: { id: true },
+            });
+            if (alreadyImported) return null;
+
+            const created = await tx.chapter.create({
+              data: {
+                comicId: st.comic!.id,
+                number: chapterNum,
+                title: chapterTitle(item),
+                publishState: "PUBLISHED",
+                publishedAt: sourceReleaseDate ?? publishedAtTime,
+                sourceChapter: {
+                  create: {
+                    sourceTitleId: st.id,
+                    externalId: item.id,
+                    numberLabel: item.numberLabel,
+                    title: item.title,
+                    volume: item.volume,
+                    sourceUrl: item.sourceUrl || st.sourceUrl,
+                    language: item.language ?? "en",
+                    publishedAt: sourceReleaseDate,
+                    pageCount: pagesData.pages.length,
+                    groups: item.groups ?? [],
+                  },
+                },
+              },
+              include: { sourceChapter: true },
+            });
+
+            await tx.comic.update({
+              where: { id: st.comic!.id },
+              data: { updatedAt: publishedAtTime },
+            });
+
+            await tx.auditLog.create({
+              data: {
+                actorId: opts?.actorId ?? null,
+                actorLabel: opts?.actorId ? undefined : "source-sync",
+                action: "chapter.auto_publish",
+                resource: "Chapter",
+                resourceId: created.id,
+                meta: {
+                  comicId: st.comic!.id,
+                  sourceId: st.sourceId,
+                  externalId: st.externalId,
+                  chapterExternalId: item.id,
+                  number: chapterNum,
+                  pageCount: pagesData.pages.length,
+                },
+              },
+            });
+
+            return created;
+          });
+
+          if (!createdChapter) continue;
+
+          publishedChapters++;
+          // Remove from failedChapterImports if it previously failed
+          this.failedChapterImports = this.failedChapterImports.filter(
+            (f) => !(f.sourceId === st.sourceId && f.chapterExternalId === item.id),
+          );
+
+          const displayNum = resolveChapterDisplayNumber(createdChapter, createdChapter.sourceChapter);
+          const chapterUrl = `/comics/${st.comic.slug}/chapter/${createdChapter.id}`;
+
+          // PART 5: Send Admin-only publication alert
+          await this.notifications?.notifyAdminsChapterEvent({
+            comicId: st.comic.id,
+            comicTitle: st.comic.title,
+            comicSlug: st.comic.slug,
+            providerId: st.sourceId,
+            providerName,
+            chapterId: createdChapter.id,
+            externalChapterId: item.id,
+            chapterNumber: createdChapter.number,
+            displayNumber: displayNum,
+            originalLabel: item.originalLabel ?? item.numberLabel,
+            chapterTitle: item.title,
+            sourceReleaseDate,
+            publishedAt: publishedAtTime,
+            status: "PUBLISHED",
+            chapterUrl,
+            sourceUrl: item.sourceUrl || st.sourceUrl,
+          });
+
+          // PART 6: Notify users who bookmarked this comic
+          await this.notifications?.notifyNewChapter(st.comic.id, createdChapter.id, {
+            providerId: st.sourceId,
+            providerName,
+            sourceReleaseDate,
+            displayNumber: displayNum,
+            originalLabel: item.originalLabel ?? item.numberLabel,
+          });
+        }
+
+        try {
+          await (this.db.sourceTitle as any).update({
+            where: { id: st.id },
+            data: { lastSyncedAt: new Date(), lastSyncStatus: "OK", lastSyncError: null },
+          });
+        } catch { /* ignore in test mock */ }
+      }
+
+      if (publishedChapters > 0 || repairedChapters > 0) {
+        await this.invalidateComicCaches();
+      }
+    } finally {
+      await this.db.releaseSyncLock(72839401);
+    }
+
+    const summary = {
+      skipped: false,
+      at: new Date().toISOString(),
+      checkedComics,
+      repairedChapters,
+      publishedChapters,
+      failedChapters,
+      conflicts: totalConflicts,
+      durationMs: Date.now() - startedAt,
+    };
+    this.syncHistory.push(summary);
+    if (this.syncHistory.length > 50) this.syncHistory.shift();
+    this.log.log(JSON.stringify({ event: "source.sync.completed", ...summary }));
+    return summary;
+  }
+
+  private recordFailedChapterImport(
+    st: { id: string; sourceId: string; externalId: string; sourceUrl: string; comic?: { id: string; title: string; slug: string } | null },
+    sourceName: string,
+    item: ChapterItem,
+    reason: string,
+  ) {
+    this.failedChapterImports = this.failedChapterImports.filter(
+      (f) => !(f.sourceId === st.sourceId && f.chapterExternalId === item.id),
+    );
+    this.failedChapterImports.push({
+      at: new Date().toISOString(),
+      comicId: st.comic?.id ?? "",
+      comicTitle: st.comic?.title ?? "",
+      comicSlug: st.comic?.slug ?? "",
+      sourceTitleId: st.id,
+      sourceId: st.sourceId,
+      sourceName,
+      externalId: st.externalId,
+      chapterExternalId: item.id,
+      number: item.number,
+      numberLabel: item.numberLabel,
+      originalLabel: item.originalLabel ?? item.numberLabel,
+      title: item.title,
+      publishedAt: item.publishedAt,
+      sourceUrl: item.sourceUrl || st.sourceUrl,
+      reason,
+    });
+    if (this.failedChapterImports.length > 100) this.failedChapterImports.shift();
+    this.recordPublishError(st.sourceId, `${st.externalId}:${item.id}`, "auto_sync_chapter", "CHAPTER_IMPORT_FAILED", reason);
+  }
+
 }

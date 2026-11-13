@@ -19,12 +19,51 @@ export default function AdminChapters({ searchParams }: { searchParams: { comicI
         <select value={id ?? ""} onChange={(e) => router.push(e.target.value ? `/admin/chapters?comicId=${e.target.value}` : "/admin/chapters")} className={input}>
           <option value="">Select a comic</option>{comics.data?.items.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
         </select></label>
-      {!id && <p className="text-muted">Choose a comic to manage its chapters. You can also open this page from a comic's "Chapters" button.</p>}
+      {!id && <p className="text-muted">Choose a comic to manage its chapters. You can also open this page from a comic&apos;s &ldquo;Chapters&rdquo; button.</p>}
       {id && <State loading={list.loading} error={list.error} />}
       {list.data && (list.data.length === 0 ? <p className="text-muted">No chapters yet.</p> : (
-        <table className={table}><thead><tr><th>#</th><th>Title</th><th>State</th><th>Pages</th><th /></tr></thead>
-          <tbody>{list.data.map((c) => (<tr key={c.id}><td>{c.number}</td><td>{c.title}</td><td><Badge v={c.publishState} /></td><td>{c._count.images}</td>
-            <td className="text-right"><Link href={`/admin/chapters/${c.id}`} className="text-primary">Manage</Link></td></tr>))}</tbody></table>))}
+        <table className={table}>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Title</th>
+              <th>Source</th>
+              <th>State</th>
+              <th>Pages</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {list.data.map((c) => (
+              <tr key={c.id}>
+                <td>{c.number}</td>
+                <td>{c.title}</td>
+                <td className="text-xs text-muted">
+                  {c.sourceChapter?.sourceTitle ? (
+                    <span>
+                      <strong className="text-fg">{c.sourceChapter.sourceTitle.sourceId}</strong> · ID: {c.sourceChapter.externalId}
+                    </span>
+                  ) : (
+                    "Local upload"
+                  )}
+                </td>
+                <td><Badge v={c.publishState} /></td>
+                <td>{c.sourceChapter?.pageCount ?? c._count?.images ?? 0}</td>
+                <td className="space-x-3 text-right">
+                  {c.comic?.slug && (
+                    <Link href={`/comics/${c.comic.slug}/chapter/${c.id}`} target="_blank" className="text-primary underline">
+                      Open reader ↗
+                    </Link>
+                  )}
+                  <Link href={`/admin/chapters/${c.id}`} className="text-primary">
+                    Manage
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
       {id && <AvailableSourceChapters key={id} comicId={id} onImported={list.reload} />}
     </div>
   );

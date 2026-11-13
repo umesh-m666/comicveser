@@ -15,8 +15,9 @@ type Provider = {
   notes: string[];
 };
 
-export default function ProviderCatalogPage() {
-  const params = useParams<{ sourceId: string }>();
+export default function ProviderCatalogPage(props?: { params?: { sourceId?: string } }) {
+  const routeParams = useParams<{ sourceId: string }>();
+  const params = props?.params ?? routeParams;
   const sourceId = String(params.sourceId ?? "");
   const { data, error, loading } = useLoad<{ enabled: boolean; sources: Provider[] }>("/admin/sources");
   const provider = data?.sources.find((item) => item.id === sourceId);

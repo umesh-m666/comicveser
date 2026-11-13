@@ -103,7 +103,7 @@ export default function Dashboard() {
                   <p className="mt-1 text-[#A8A1B5]">{alert.availableCount} new chapter{alert.availableCount === 1 ? "" : "s"} available from {alert.sourceName} · {alert.title}</p>
                 </li>
               ))}
-            </ul>
+            </div>
           )}
         </section>
       )}

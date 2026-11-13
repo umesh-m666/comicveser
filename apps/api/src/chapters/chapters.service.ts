@@ -1,3 +1,4 @@
+import { resolveChapterDisplayNumber } from "../sources/chapter-display";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -7,17 +8,24 @@ import { SourcesService } from "../sources/sources.service";
 import { IMAGE_TYPES, StorageService } from "../storage/storage.service";
 import { CreateChapterDto, RegisterImagesDto, UpdateChapterDto, UploadUrlDto } from "./dto/chapter.dto";
 
-const LIVE: Prisma.ChapterWhereInput = {
-  publishState: "PUBLISHED", deletedAt: null,
-  comic: { publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] },
-};
-
 @Injectable()
 export class ChaptersService {
   constructor(private db: PrismaService, private storage: StorageService, private notes: NotificationsService, private sources: SourcesService) {}
 
+  private get liveWhere(): Prisma.ChapterWhereInput {
+    return {
+      publishState: "PUBLISHED",
+      deletedAt: null,
+      comic: {
+        publishState: "PUBLISHED",
+        deletedAt: null,
+        OR: this.db.publicComicOrFilter,
+      },
+    };
+  }
+
   async meta(id: string) {
-    const ch = await this.db.chapter.findFirst({ where: { id, ...LIVE }, include: {
+    const ch = await this.db.chapter.findFirst({ where: { id, ...this.liveWhere }, include: {
       comic: { select: { id: true, slug: true, title: true } },
       sourceChapter: { include: { sourceTitle: { select: { state: true, sourceId: true, externalId: true } } } },
       _count: { select: { images: true } },
@@ -25,10 +33,12 @@ export class ChaptersService {
     if (!ch || (ch.sourceChapter && ch.sourceChapter.sourceTitle.state !== "APPROVED")) throw new NotFoundException("Chapter not found.");
     const near = (cmp: "lt" | "gt") => this.db.chapter.findFirst({
       where: { comicId: ch.comicId, publishState: "PUBLISHED", deletedAt: null, number: { [cmp]: ch.number } },
-      orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } } });
+      orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } } });
     const [prev, next] = await Promise.all([near("lt"), near("gt")]);
-    const nav = (entry: typeof prev) => entry ? { id: entry.id, number: entry.number, displayNumber: entry.sourceChapter ? entry.sourceChapter.numberLabel ?? "Special" : String(entry.number) } : null;
+    const nav = (entry: typeof prev) => entry ? { id: entry.id, number: entry.number, displayNumber: resolveChapterDisplayNumber(entry, entry.sourceChapter) } : null;
 
+    // Every SourceChapter retains its own SourceTitle relationship (e.g. WeebCentral or Asura Scans),
+    // ensuring the reader resolves through the chapter's original source provider.
     let external = ch.sourceChapter ? {
       sourceId: ch.sourceChapter.sourceTitle.sourceId,
       mangaId: ch.sourceChapter.sourceTitle.externalId,
@@ -48,7 +58,7 @@ export class ChaptersService {
     }
 
     return {
-      id: ch.id, number: ch.number, displayNumber: ch.sourceChapter ? ch.sourceChapter.numberLabel ?? "Special" : String(ch.number), title: ch.title,
+      id: ch.id, number: ch.number, displayNumber: resolveChapterDisplayNumber(ch, ch.sourceChapter), title: ch.title,
       comic: ch.comic, imageCount: ch.sourceChapter?.pageCount ?? ch._count.images, prev: nav(prev), next: nav(next),
       ...(external && { external }),
       ...(alternatives.length > 0 && { alternatives }),
@@ -57,7 +67,7 @@ export class ChaptersService {
 
   // Images are served in small batches so the reader never loads a whole chapter at once.
   async images(id: string, from: number, limit: number) {
-    const chapter = await this.db.chapter.findFirst({ where: { id, ...LIVE }, include: { sourceChapter: true } });
+    const chapter = await this.db.chapter.findFirst({ where: { id, ...this.liveWhere }, include: { sourceChapter: true } });
     if (!chapter) throw new NotFoundException("Chapter not found.");
     if (chapter.sourceChapter) {
       const sourcePages = await this.sources.publishedChapterPages(id, from, limit);
@@ -134,7 +144,7 @@ export class ChaptersService {
       throw new BadRequestException("The list must contain every image in this chapter exactly once.");
     await this.db.$transaction([
       ...ids.map((id: string, i: number) => this.db.chapterImage.update({ where: { id }, data: { position: 100000 + i } })), // avoid unique clashes
-      ...ids.map((id, i) => this.db.chapterImage.update({ where: { id }, data: { position: i } })),
+      ...ids.map((id: string, i: number) => this.db.chapterImage.update({ where: { id }, data: { position: i } })),
       this.db.auditLog.create({ data: { actorId, action: "chapter.images.reorder", resource: "Chapter", resourceId: chapterId } }),
     ]);
   }

@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImportAlternativeChaptersDto = exports.SourceTitleActionDto = exports.UpdateSourceDto = exports.SaveExternalDto = exports.PagesQuery = exports.ChaptersQuery = exports.SearchSourcesQuery = void 0;
+exports.ImportAlternativeChaptersDto = exports.SourceTitleActionDto = exports.UpdateSourceDto = exports.SaveExternalDto = exports.PagesQuery = exports.ImportChaptersBodyDto = exports.LinkFallbackDto = exports.FallbackCandidatesQuery = exports.ComicChaptersQuery = exports.ChaptersQuery = exports.SearchSourcesQuery = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 const LANG = /^[a-z]{2,3}(-[a-z]{2,4})?$/i;
@@ -87,6 +87,75 @@ __decorate([
     (0, class_validator_1.Max)(500),
     __metadata("design:type", Number)
 ], ChaptersQuery.prototype, "limit", void 0);
+class ComicChaptersQuery extends ChaptersQuery {
+    sourceId;
+}
+exports.ComicChaptersQuery = ComicChaptersQuery;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Matches)(/^[a-z0-9-]{2,30}$/),
+    __metadata("design:type", String)
+], ComicChaptersQuery.prototype, "sourceId", void 0);
+class FallbackCandidatesQuery {
+    q;
+    sourceId;
+    page = 1;
+    limit = 12;
+}
+exports.FallbackCandidatesQuery = FallbackCandidatesQuery;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(0, 150),
+    __metadata("design:type", String)
+], FallbackCandidatesQuery.prototype, "q", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsIn)(["weebcentral", "asurascans"]),
+    __metadata("design:type", String)
+], FallbackCandidatesQuery.prototype, "sourceId", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], FallbackCandidatesQuery.prototype, "page", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(24),
+    __metadata("design:type", Number)
+], FallbackCandidatesQuery.prototype, "limit", void 0);
+class LinkFallbackDto {
+    sourceId;
+    externalId;
+}
+exports.LinkFallbackDto = LinkFallbackDto;
+__decorate([
+    (0, class_validator_1.IsIn)(["weebcentral", "asurascans"]),
+    __metadata("design:type", String)
+], LinkFallbackDto.prototype, "sourceId", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.Length)(1, 150),
+    __metadata("design:type", String)
+], LinkFallbackDto.prototype, "externalId", void 0);
+class ImportChaptersBodyDto {
+    chapterIds;
+}
+exports.ImportChaptersBodyDto = ImportChaptersBodyDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayMaxSize)(500),
+    (0, class_validator_1.IsString)({ each: true }),
+    __metadata("design:type", Array)
+], ImportChaptersBodyDto.prototype, "chapterIds", void 0);
 class PagesQuery {
     quality = "data";
 }
@@ -196,4 +265,3 @@ __decorate([
     (0, class_validator_1.Max)(500),
     __metadata("design:type", Number)
 ], ImportAlternativeChaptersDto.prototype, "limit", void 0);
-//# sourceMappingURL=sources.dto.js.map

@@ -28,7 +28,7 @@ export class RecommendationsService {
     const seen = [...new Set([...bms, ...hist].map((x) => x.comicId))];
     const cands = await this.db.comic.findMany({ where: {
       publishState: "PUBLISHED", deletedAt: null, id: { notIn: seen },
-      OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }],
+      OR: this.db.publicComicOrFilter,
     }, orderBy: { views: "desc" }, take: 200, include: { genres: { include: { genre: true } } } });
     const recent = Date.now() - 30 * 864e5;
     const score = (c: (typeof cands)[number]) => c.genres.reduce((s, g) => s + (w.get(g.genreId) ?? 0), 0) + Math.log10(c.views + 1) * 0.5 + (c.updatedAt.getTime() > recent ? 1 : 0);

@@ -40,7 +40,7 @@ export interface Paged<T> { items: T[]; total: number; totalExact?: boolean; pag
 export type SearchResponse = Paged<MangaSummary>;
 
 export interface ChapterItem {
-  id: string; sourceId: string; mangaId: string; number: number | null; numberLabel: string | null; title: string | null; volume: string | null;
+  id: string; sourceId: string; mangaId: string; number: number | null; numberLabel: string | null; originalLabel?: string | null; title: string | null; volume: string | null;
   language: string | null; publishedAt: string | null; groups: string[]; pageCount: number | null; sourceUrl: string; duplicateNumber: boolean;
 }
 export type ChaptersResponse = Paged<ChapterItem>;

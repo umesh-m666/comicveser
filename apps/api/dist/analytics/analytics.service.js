@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AnalyticsModule = exports.AnalyticsController = exports.AnalyticsService = void 0;
 const common_1 = require("@nestjs/common");
@@ -80,7 +81,7 @@ let AnalyticsService = class AnalyticsService {
         if (d.type === "COMIC_VIEW" && comicId) {
             const r = await this.db.comic.updateMany({ where: {
                     id: comicId, publishState: "PUBLISHED", deletedAt: null,
-                    OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }],
+                    OR: this.db.publicComicOrFilter,
                 }, data: { views: { increment: 1 } } });
             if (!r.count)
                 comicId = undefined;
@@ -118,7 +119,7 @@ let AnalyticsService = class AnalyticsService {
 exports.AnalyticsService = AnalyticsService;
 exports.AnalyticsService = AnalyticsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object])
 ], AnalyticsService);
 let AnalyticsController = class AnalyticsController {
     svc;
@@ -152,7 +153,7 @@ __decorate([
 exports.AnalyticsController = AnalyticsController = __decorate([
     (0, swagger_1.ApiTags)("analytics"),
     (0, common_1.Controller)(),
-    __metadata("design:paramtypes", [AnalyticsService, prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [AnalyticsService, typeof (_b = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _b : Object])
 ], AnalyticsController);
 let AnalyticsModule = class AnalyticsModule {
 };
@@ -160,4 +161,3 @@ exports.AnalyticsModule = AnalyticsModule;
 exports.AnalyticsModule = AnalyticsModule = __decorate([
     (0, common_1.Module)({ controllers: [AnalyticsController], providers: [AnalyticsService] })
 ], AnalyticsModule);
-//# sourceMappingURL=analytics.service.js.map

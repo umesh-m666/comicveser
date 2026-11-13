@@ -28,7 +28,7 @@ export class AnalyticsService {
     if (d.type === "COMIC_VIEW" && comicId) {
       const r = await this.db.comic.updateMany({ where: {
         id: comicId, publishState: "PUBLISHED", deletedAt: null,
-        OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }],
+        OR: this.db.publicComicOrFilter,
       }, data: { views: { increment: 1 } } });
       if (!r.count) comicId = undefined;
     }

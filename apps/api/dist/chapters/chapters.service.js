@@ -8,8 +8,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var _a, _b, _c, _d;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChaptersService = void 0;
+const chapter_display_1 = require("../sources/chapter-display");
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
@@ -17,10 +19,6 @@ const notifications_service_1 = require("../notifications/notifications.service"
 const prisma_service_1 = require("../prisma/prisma.service");
 const sources_service_1 = require("../sources/sources.service");
 const storage_service_1 = require("../storage/storage.service");
-const LIVE = {
-    publishState: "PUBLISHED", deletedAt: null,
-    comic: { publishState: "PUBLISHED", deletedAt: null, OR: [{ sourceTitle: { is: null } }, { sourceTitle: { is: { state: "APPROVED" } } }] },
-};
 let ChaptersService = class ChaptersService {
     db;
     storage;
@@ -32,8 +30,19 @@ let ChaptersService = class ChaptersService {
         this.notes = notes;
         this.sources = sources;
     }
+    get liveWhere() {
+        return {
+            publishState: "PUBLISHED",
+            deletedAt: null,
+            comic: {
+                publishState: "PUBLISHED",
+                deletedAt: null,
+                OR: this.db.publicComicOrFilter,
+            },
+        };
+    }
     async meta(id) {
-        const ch = await this.db.chapter.findFirst({ where: { id, ...LIVE }, include: {
+        const ch = await this.db.chapter.findFirst({ where: { id, ...this.liveWhere }, include: {
                 comic: { select: { id: true, slug: true, title: true } },
                 sourceChapter: { include: { sourceTitle: { select: { state: true, sourceId: true, externalId: true } } } },
                 _count: { select: { images: true } },
@@ -42,10 +51,12 @@ let ChaptersService = class ChaptersService {
             throw new common_1.NotFoundException("Chapter not found.");
         const near = (cmp) => this.db.chapter.findFirst({
             where: { comicId: ch.comicId, publishState: "PUBLISHED", deletedAt: null, number: { [cmp]: ch.number } },
-            orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, sourceChapter: { select: { numberLabel: true } } }
+            orderBy: { number: cmp === "lt" ? "desc" : "asc" }, select: { id: true, number: true, title: true, sourceChapter: { select: { numberLabel: true, title: true } } }
         });
         const [prev, next] = await Promise.all([near("lt"), near("gt")]);
-        const nav = (entry) => entry ? { id: entry.id, number: entry.number, displayNumber: entry.sourceChapter ? entry.sourceChapter.numberLabel ?? "Special" : String(entry.number) } : null;
+        const nav = (entry) => entry ? { id: entry.id, number: entry.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(entry, entry.sourceChapter) } : null;
+        // Every SourceChapter retains its own SourceTitle relationship (e.g. WeebCentral or Asura Scans),
+        // ensuring the reader resolves through the chapter's original source provider.
         let external = ch.sourceChapter ? {
             sourceId: ch.sourceChapter.sourceTitle.sourceId,
             mangaId: ch.sourceChapter.sourceTitle.externalId,
@@ -63,7 +74,7 @@ let ChaptersService = class ChaptersService {
             alternatives = resolved.alternatives;
         }
         return {
-            id: ch.id, number: ch.number, displayNumber: ch.sourceChapter ? ch.sourceChapter.numberLabel ?? "Special" : String(ch.number), title: ch.title,
+            id: ch.id, number: ch.number, displayNumber: (0, chapter_display_1.resolveChapterDisplayNumber)(ch, ch.sourceChapter), title: ch.title,
             comic: ch.comic, imageCount: ch.sourceChapter?.pageCount ?? ch._count.images, prev: nav(prev), next: nav(next),
             ...(external && { external }),
             ...(alternatives.length > 0 && { alternatives }),
@@ -71,7 +82,7 @@ let ChaptersService = class ChaptersService {
     }
     // Images are served in small batches so the reader never loads a whole chapter at once.
     async images(id, from, limit) {
-        const chapter = await this.db.chapter.findFirst({ where: { id, ...LIVE }, include: { sourceChapter: true } });
+        const chapter = await this.db.chapter.findFirst({ where: { id, ...this.liveWhere }, include: { sourceChapter: true } });
         if (!chapter)
             throw new common_1.NotFoundException("Chapter not found.");
         if (chapter.sourceChapter) {
@@ -164,6 +175,5 @@ let ChaptersService = class ChaptersService {
 exports.ChaptersService = ChaptersService;
 exports.ChaptersService = ChaptersService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService, storage_service_1.StorageService, notifications_service_1.NotificationsService, sources_service_1.SourcesService])
+    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof storage_service_1.StorageService !== "undefined" && storage_service_1.StorageService) === "function" ? _b : Object, typeof (_c = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _c : Object, typeof (_d = typeof sources_service_1.SourcesService !== "undefined" && sources_service_1.SourcesService) === "function" ? _d : Object])
 ], ChaptersService);
-//# sourceMappingURL=chapters.service.js.map
