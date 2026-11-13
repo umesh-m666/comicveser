@@ -315,9 +315,9 @@ export default function SourceCatalog({ sourceId, sourceName, types, enabled }: 
           )}
 
           {(page > 1 || result.hasMore) && <nav aria-label="Provider catalogue pagination" className="mt-5 flex items-center justify-center gap-3 text-sm">
-            <button type="button" disabled={page <= 1 || searchState === "loading" || bulkBusy} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-md border border-line px-3 py-2 disabled:opacity-40">Previous</button>
+            <button type="button" disabled={page <= 1 || bulkBusy} onClick={() => setPage((current) => Math.max(1, current - 1))} className="rounded-md border border-line px-3 py-2 disabled:opacity-40">Previous</button>
             <span className="text-muted">Page {page}</span>
-            <button type="button" disabled={!result.hasMore || page * PAGE_SIZE >= 10_000 || searchState === "loading" || bulkBusy} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-line px-3 py-2 disabled:opacity-40">Next</button>
+            <button type="button" disabled={!result.hasMore || page * PAGE_SIZE >= 10_000 || bulkBusy} onClick={() => setPage((current) => current + 1)} className="rounded-md border border-line px-3 py-2 disabled:opacity-40">Next</button>
           </nav>}
         </section>
       )}

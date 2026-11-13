@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Search, SlidersHorizontal, X } from "lucide-react";
+import Link from "next/link";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ChevronDown, Search, SlidersHorizontal } from "lucide-react";
 import Track from "@/components/Track";
 import ComicCard from "@/components/ComicCard";
 import EmptyState from "@/components/EmptyState";
@@ -30,10 +31,7 @@ function BrowseContent() {
   const spKey = sp.toString();
   const [data, setData] = useState<Data>(EMPTY);
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-  const [retry, setRetry] = useState(0);
-  const lastQ = useRef<string | null>(null); // last search text pushed to the URL, so typing is never overwritten
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const query: BrowseQuery = {
     q: sp.get("q") ?? undefined, genre: sp.get("genre") ?? undefined, type: sp.get("type") ?? undefined,
@@ -41,40 +39,34 @@ function BrowseContent() {
     minRating: sp.get("minRating") ?? undefined, year: sp.get("year") ?? undefined,
     sort: sp.get("sort") ?? "updated", page: sp.get("page") ?? "1",
   };
-  const selectedGenres = (query.genre ?? "").split(",").filter(Boolean);
-
-  const update = useCallback((patch: Record<string, string | null>, keepPage = false) => {
-    const u = new URLSearchParams(window.location.search);
-    Object.entries(patch).forEach(([k, v]) => { if (v === null || v === "") u.delete(k); else u.set(k, v); });
-    if (!keepPage) u.delete("page");
-    const qs = u.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname]);
-
-  // Debounced text inputs. Local state keeps typing instant; the URL (and the request) updates after a pause.
-  const [qInput, setQInput] = useState(query.q ?? "");
-  const [creatorInput, setCreatorInput] = useState(query.creator ?? "");
-  useEffect(() => {
-    const urlQ = sp.get("q") ?? "";
-    if (lastQ.current === null || urlQ !== lastQ.current) setQInput(urlQ); // external change (header search, reset, back button)
-    setCreatorInput(sp.get("creator") ?? "");
-  }, [spKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  useDebounced(qInput, 350, (v) => { lastQ.current = v.trim(); if (v.trim() !== (sp.get("q") ?? "")) update({ q: v.trim() || null }); });
-  useDebounced(creatorInput, 450, (v) => { if (v.trim() !== (sp.get("creator") ?? "")) update({ creator: v.trim() || null }); });
+  const hasActiveFilters = Boolean(query.genre || query.type || query.status || query.minRating || query.year || (query.sort && query.sort !== "updated"));
 
   useEffect(() => {
     let active = true;
     setLoading(true); setFailed(false);
     browseComics(query)
-      .then((res) => { if (active) { setData(res); setLoading(false); } })
-      .catch(() => { if (active) { setData(EMPTY); setFailed(true); setLoading(false); } });
-    return () => { active = false; };
+      .then((res) => {
+        if (active) {
+          setData(res);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setData({ items: [], total: 0, page: 1, pages: 1 });
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spKey, retry]);
+  }, [searchParams.toString()]);
 
-  const toggleGenre = (g: string) => {
-    const next = selectedGenres.includes(g) ? selectedGenres.filter((x) => x !== g) : [...selectedGenres, g];
-    update({ genre: next.join(",") || null });
+  const href = (page: number) => {
+    const u = new URLSearchParams(searchParams.toString());
+    u.set("page", String(page));
+    return `/browse?${u}`;
   };
   const single = (key: "status" | "type", value: string) => update({ [key]: query[key] === value ? null : value });
 
@@ -124,60 +116,82 @@ function BrowseContent() {
     </div>
   );
 
+  const pages: number[] = [];
+  for (let p = 1; p <= data.pages; p++) {
+    if (p === 1 || p === data.pages || Math.abs(p - data.page) <= 2) pages.push(p);
+    else if (pages[pages.length - 1] !== -1) pages.push(-1);
+  }
+
   return (
     <div>
       {query.q?.trim() && <Track type="SEARCH" query={query.q.trim().slice(0, 100)} />}
-      <h1 className="text-2xl font-bold md:text-3xl">Browse Series</h1>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 md:gap-3">
-        <div role="search" className="relative min-w-0 flex-1 basis-64">
-          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-          <label htmlFor="browse-q" className="sr-only">Search by title or alternative title</label>
-          <input id="browse-q" type="search" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Search by title or alternative title..." className="w-full py-2.5 pl-10 pr-20 text-sm [&::-webkit-search-cancel-button]:hidden" />
-          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-            {loading && <Loader2 size={16} className="animate-spin text-muted" aria-label="Searching" />}
-            {qInput && <button type="button" aria-label="Clear search" onClick={() => { setQInput(""); lastQ.current = ""; update({ q: null }); }} className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10"><X size={15} /></button>}
+      {/* Hero */}
+      <section className="cv-feature rounded-3xl p-6 md:p-8">
+        <p className="cv-eyebrow">Discover your next obsession</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">Browse Series</h1>
+        <p className="mt-2 text-sm text-muted md:text-base" aria-live="polite">
+          {loading ? "Searching comics..." : `${data.total} ${data.total === 1 ? "series" : "series"} in the library`}
+        </p>
+        <form action="/browse" role="search" className="mt-5 flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={17} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+            <input name="q" defaultValue={query.q} placeholder="Search comics, manga, manhwa…" aria-label="Search series" className="w-full rounded-full border-line bg-card py-3 pl-11 pr-4" />
           </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm"><span className="sr-only md:not-sr-only md:text-muted">Sort</span>
-          <select value={query.sort} onChange={(e) => update({ sort: e.target.value })} className="px-3 py-2 text-sm" aria-label="Sort by">
-            {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-        </label>
-        <button type="button" className="cv-btn lg:hidden" aria-expanded={panelOpen} aria-controls="filter-panel" onClick={() => setPanelOpen((o) => !o)}>
-          <SlidersHorizontal size={16} aria-hidden />Filters{activeFilters.length > 0 && <span className="rounded-full bg-[#9333ea] px-1.5 text-xs">{activeFilters.length}</span>}
+          <button className="shrink-0 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white">Search</button>
+        </form>
+      </section>
+
+      {/* Collapsible filters (same filter form as before, inside the panel) */}
+      <div className="mt-5">
+        <button type="button" onClick={() => setFiltersOpen((v) => !v)} aria-expanded={filtersOpen} className="flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-sm font-bold hover:border-primary">
+          <SlidersHorizontal size={15} className="text-primary" /> Filters
+          {hasActiveFilters && <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-black text-white">On</span>}
+          <ChevronDown size={15} className={`text-muted transition ${filtersOpen ? "rotate-180" : ""}`} />
         </button>
+        {filtersOpen && (
+          <form action="/browse" className="cv-panel mt-3 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Select name="genre" label="Genre" value={query.genre} options={GENRES} />
+            <Select name="type" label="Type" value={query.type} options={TYPES} />
+            <Select name="status" label="Status" value={query.status} options={STATUSES} />
+            <Select name="minRating" label="Minimum rating" value={query.minRating} options={["9", "8", "7", "6"]} />
+            <Select name="year" label="Release year" value={query.year} options={years().map(String)} />
+            <Select name="sort" label="Sort by" value={query.sort ?? "updated"} options={SORTS} />
+            <input type="hidden" name="q" value={query.q ?? ""} />
+            <div className="flex items-end gap-2 sm:col-span-2">
+              <button className="flex-1 rounded-md bg-primary py-2 text-sm font-semibold">Apply filters</button>
+              <Link href="/browse" className="rounded-md border border-line px-3 py-2 text-sm hover:bg-card">Reset</Link>
+            </div>
+          </form>
+        )}
       </div>
 
-      {activeFilters.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Active filters">
-          {activeFilters.map((f) => (
-            <button key={f.key} type="button" onClick={f.clear} className="cv-chip" data-active="true" aria-label={`Remove filter ${f.label}`}>{f.label}<X size={12} aria-hidden /></button>
-          ))}
-          <button type="button" onClick={resetAll} className="px-2 text-xs font-semibold text-primary hover:underline">Clear all</button>
-        </div>
-      )}
-
-      <div className="mt-6 grid gap-8 lg:grid-cols-[17rem_1fr]">
-        <aside id="filter-panel" className={`${panelOpen ? "block" : "hidden"} cv-panel h-fit p-4 lg:sticky lg:top-20 lg:block`} aria-label="Filters">{panel}</aside>
-        <section aria-live="polite">
-          <p className="mb-4 text-sm text-muted">{loading ? "Searching comics..." : `${data.total} ${data.total === 1 ? "comic" : "comics"} found`}</p>
-          {loading && data.items.length === 0 ? <CardGridSkeleton count={12} className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-5" /> :
-            failed ? <EmptyState title="Couldn't load comics" body="Check your connection and try again." action={{ label: "Retry", onClick: () => setRetry((n) => n + 1) }} /> :
-            data.items.length === 0 ? <EmptyState title="No comics match" body={query.q ? `Nothing found for “${query.q}”. Try another title or remove some filters.` : "Try removing a filter or searching a different title."} action={hasAny ? { label: "Reset filters", onClick: resetAll } : undefined} /> : (
-              <div className={`grid grid-cols-2 gap-3.5 transition-opacity sm:grid-cols-3 md:grid-cols-4 2xl:grid-cols-5 ${loading ? "opacity-50" : ""}`}>
-                {data.items.map((c) => <ComicCard key={c.slug} comic={c} />)}
-              </div>
-            )}
-          {data.pages > 1 && (
-            <nav aria-label="Pagination" className="mt-10 flex items-center justify-center gap-3 text-sm">
-              <button type="button" disabled={data.page <= 1} onClick={() => goPage(data.page - 1)} className="cv-btn">Previous</button>
-              <span className="text-muted">Page {data.page} of {data.pages}</span>
-              <button type="button" disabled={data.page >= data.pages} onClick={() => goPage(data.page + 1)} className="cv-btn">Next</button>
-            </nav>
-          )}
-        </section>
-      </div>
+      <section className="mt-6">
+        {!loading && data.items.length === 0 ? (
+          <div className="rounded-lg border border-line bg-card py-16 text-center">
+            <p className="font-semibold">No comics match these filters</p>
+            <p className="mt-1 text-sm text-muted">Try removing a filter or searching a different title.</p>
+            <Link href="/browse" className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm font-semibold">Reset filters</Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-7 lg:grid-cols-4">
+            {loading
+              ? Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton aspect-[2/3]" />)
+              : data.items.map((c) => <ComicCard key={c.slug} comic={c} />)}
+          </div>
+        )}
+        {data.pages > 1 && (
+          <nav aria-label="Pagination" className="mt-10 flex flex-wrap items-center justify-center gap-1.5 text-sm">
+            {data.page > 1 && <Link href={href(data.page - 1)} className="rounded-full border border-line px-3.5 py-2 font-semibold hover:bg-card">← Prev</Link>}
+            {pages.map((p, i) => p === -1 ? (
+              <span key={`gap-${i}`} className="px-1 text-muted">…</span>
+            ) : (
+              <Link key={p} href={href(p)} aria-current={p === data.page ? "page" : undefined} className={`rounded-full px-3.5 py-2 font-bold ${p === data.page ? "bg-primary text-white" : "border border-line hover:bg-card"}`}>{p}</Link>
+            ))}
+            {data.page < data.pages && <Link href={href(data.page + 1)} className="rounded-full border border-line px-3.5 py-2 font-semibold hover:bg-card">Next →</Link>}
+          </nav>
+        )}
+      </section>
     </div>
   );
 }

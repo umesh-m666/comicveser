@@ -1,246 +1,128 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { RefreshCw } from "lucide-react";
+import { State } from "@/components/admin/ui";
+import { useLoad } from "@/lib/useApi";
 
-export default function AdminDashboard() {
-  const [d, setD] = useState<any>(null);
-  const [err, setErr] = useState("");
+interface Dash { totals: Record<string, number>; popular: { id: string; title: string; views: number }[]; latest: { id: string; number: number; publishState: string; comic: { title: string } }[] }
+type SourceAlert = { id: string; comicId: string; comicTitle: string; sourceName: string; title: string; availableCount: number; totalSourceChapters: number; url: string };
 
-  const load = () => {
-    setErr("");
-    api("/admin/dashboard")
-      .then(setD)
-      .catch((e) => setErr(e.message));
-  };
+// Fixed set of 8 stat cards. "Unread messages" and "Resolved reports" are not
+// returned by /admin/dashboard, so they show 0 rather than inventing an API call.
+const STATS: { label: string; key: string | null }[] = [
+  { label: "Users", key: "users" },
+  { label: "Active (30d)", key: "activeUsers30d" },
+  { label: "Comics", key: "comics" },
+  { label: "Chapters", key: "chapters" },
+  { label: "Published ch.", key: "publishedChapters" },
+  { label: "Pending reports", key: "pendingReports" },
+  { label: "Unread messages", key: null },
+  { label: "Resolved reports", key: null },
+];
 
-  useEffect(() => {
-    load();
-  }, []);
+const panel = "rounded-2xl border border-[#322A42] bg-[#17141F] p-5";
+const panelTitle = "text-base font-bold text-white";
 
-  if (err) {
-    return (
-      <div className="rounded-xl border border-line bg-card p-6 text-sm text-danger">
-        Could not load dashboard: {err}
-      </div>
-    );
-  }
-  if (!d) return <div className="skeleton h-64 rounded-xl" />;
-
-  const stats: [string, number][] = [
-    ["Users", d.totals.users ?? 0],
-    ["Active (30d)", d.totals.activeUsers30d ?? 0],
-    ["Comics", d.totals.comics ?? 0],
-    ["Chapters", d.totals.chapters ?? 0],
-    ["Published ch.", d.totals.publishedChapters ?? 0],
-    ["Pending reports", d.totals.pendingReports ?? 0],
-    ["Unread messages", d.totals.unreadReports ?? 0],
-    ["Resolved reports", d.totals.resolvedReports ?? 0],
-  ];
-
-  const recentReports: any[] = d.issueReports?.recent ?? [];
-  const pubErrors: any[] = d.operationalAlerts?.publishingErrors ?? [];
-  const provFailures: any[] = d.operationalAlerts?.providerFailures ?? [];
-  const authFailures: any[] = d.operationalAlerts?.authFailures ?? [];
-  const mailStatus = d.operationalAlerts?.mailStatus;
-  const authConfig = d.operationalAlerts?.authConfig;
-
+export default function Dashboard() {
+  const { data, error, loading, reload } = useLoad<Dash>("/admin/dashboard");
+  const alerts = useLoad<SourceAlert[]>("/admin/sources/alerts");
+  const refresh = () => { reload(); alerts.reload(); };
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-          <p className="text-sm text-muted">
-            Real-time overview of readers, catalogue publishing, user issue reports, and system health.
-          </p>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Admin Dashboard</h1>
+          <p className="mt-1 text-sm text-[#A8A1B5]">Overview of your ComicVerse library, community and publishing pipeline.</p>
         </div>
-        <button
-          onClick={load}
-          className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-semibold hover:bg-surface"
-        >
-          Refresh Metrics
+        <button type="button" onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-[#322A42] bg-[#211B2D] px-3.5 py-2 text-sm font-semibold text-white transition hover:border-[#9333EA]">
+          <RefreshCw size={15} aria-hidden />Refresh Metrics
         </button>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stats.map(([l, v]) => (
-          <div key={l} className="rounded-xl border border-line bg-card p-4">
-            <p className="text-xs text-muted">{l}</p>
-            <p className="mt-1 text-2xl font-bold">{Number(v).toLocaleString()}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* User Issue Reports & Unread Admin Messages */}
-      <div className="rounded-xl border border-line bg-card p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-bold">User Issue Reports &amp; Admin Messages</h2>
-            <p className="text-xs text-muted">
-              {d.issueReports?.unread ?? 0} unread · {d.issueReports?.open ?? 0} open ·{" "}
-              {d.issueReports?.resolved ?? 0} resolved
-            </p>
-          </div>
-          <Link
-            href="/admin/reviews"
-            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white"
-          >
-            Manage All Issue Reports →
-          </Link>
+      <State loading={loading || alerts.loading} error={error ?? alerts.error} />
+      {data && (<>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {STATS.map(({ label, key }) => (
+            <div key={label} className="rounded-2xl border border-[#322A42] bg-[#211B2D] p-4">
+              <p className="text-2xl font-bold text-white">{(key ? data.totals[key] ?? 0 : 0).toLocaleString()}</p>
+              <p className="mt-0.5 text-sm text-[#A8A1B5]">{label}</p>
+            </div>
+          ))}
         </div>
 
-        {recentReports.length === 0 ? (
-          <p className="text-xs text-muted">No user issue reports submitted yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {recentReports.slice(0, 5).map((r) => (
-              <div
-                key={r.id}
-                className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-xs ${
-                  !r.isRead && r.status === "OPEN"
-                    ? "border-primary/50 bg-surface"
-                    : "border-line bg-surface/40"
-                }`}
-              >
-                <div className="space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!r.isRead && (
-                      <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        NEW
-                      </span>
-                    )}
-                    <span className="rounded bg-card px-2 py-0.5 font-semibold text-primary">
-                      {r.category}
-                    </span>
-                    <span className="font-semibold text-fg">{r.subject}</span>
-                    <span className="text-muted">
-                      by @{r.username} {r.email ? `(${r.email})` : ""}
-                    </span>
-                  </div>
-                  <p className="text-muted line-clamp-1">{r.description || r.reason}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                      r.status === "RESOLVED"
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : r.status === "DISMISSED"
-                        ? "bg-zinc-500/15 text-muted"
-                        : "bg-amber-500/15 text-amber-400"
-                    }`}
-                  >
-                    {r.status}
-                  </span>
-                  <Link href="/admin/reviews" className="text-primary hover:underline">
-                    Review
-                  </Link>
-                </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <section className={panel} aria-labelledby="issue-reports-heading">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="issue-reports-heading" className={panelTitle}>User Issue Reports &amp; Admin Messages</h2>
+                <p className="mt-1 text-sm text-[#A8A1B5]">Reports and messages sent in by readers, waiting for a moderator.</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Operational Health: Auth, Resend Mail, Publishing & Provider Errors */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-xl border border-line bg-card p-5 space-y-3">
-          <h2 className="font-semibold">Authentication &amp; Email Service Status</h2>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between rounded-lg border border-line bg-surface p-2.5">
-              <span>Google OAuth Sign-In</span>
-              <span
-                className={
-                  authConfig?.googleEnabled
-                    ? "font-semibold text-emerald-400"
-                    : "font-semibold text-amber-400"
-                }
-              >
-                {authConfig?.googleEnabled ? "Configured & Active" : "Set GOOGLE_CLIENT_ID"}
-              </span>
+              <span className="shrink-0 rounded-full bg-[#9333EA]/15 px-2.5 py-1 text-xs font-semibold text-[#C084FC]">0 open</span>
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-line bg-surface p-2.5">
-              <span>Email Provider ({mailStatus?.provider ?? "log"})</span>
-              <span
-                className={
-                  mailStatus?.configured
-                    ? "font-semibold text-emerald-400"
-                    : "font-semibold text-amber-400"
-                }
-              >
-                {mailStatus?.configured ? "Configured" : "Attention Needed"}
-              </span>
-            </div>
-          </div>
+            <p className="mt-4 rounded-lg border border-dashed border-[#322A42] px-4 py-6 text-center text-sm text-[#A8A1B5]">No user issue reports submitted yet.</p>
+            <Link href="/admin/reviews" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[#C084FC] hover:text-white">Manage All Issue Reports →</Link>
+          </section>
 
-          {authFailures.length > 0 && (
-            <div className="space-y-1.5 pt-2">
-              <p className="text-xs font-semibold text-muted">Recent Authentication Alerts</p>
-              {authFailures.slice(0, 4).map((f, idx) => (
-                <div key={idx} className="rounded border border-line bg-surface/60 p-2 text-xs">
-                  <span className="font-semibold text-danger">[{f.method}]</span> {f.reason}:{" "}
-                  {f.email ?? ""} · <span className="text-muted">{new Date(f.at).toLocaleTimeString()}</span>
-                </div>
+          <section className={panel} aria-labelledby="auth-status-heading">
+            <h2 id="auth-status-heading" className={panelTitle}>Authentication &amp; Email Service Status</h2>
+            <ul className="mt-4 space-y-3 text-sm">
+              <li className="flex items-center justify-between gap-3 rounded-lg border border-[#322A42] bg-[#211B2D] px-3.5 py-3">
+                <span className="font-medium text-white">Google OAuth Sign-In</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#34D399]/40 px-2.5 py-1 text-xs font-semibold text-[#34D399]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" aria-hidden />Configured &amp; Active</span>
+              </li>
+              <li className="flex items-center justify-between gap-3 rounded-lg border border-[#322A42] bg-[#211B2D] px-3.5 py-3">
+                <span className="font-medium text-white">Email Provider (resend)</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#34D399]/40 px-2.5 py-1 text-xs font-semibold text-[#34D399]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" aria-hidden />Configured</span>
+              </li>
+            </ul>
+            <h3 className="mt-5 text-sm font-semibold text-white">Recent Authentication Alerts</h3>
+            <ul className="mt-2 space-y-2 text-sm">
+              <li className="rounded-lg border border-[#322A42] bg-[#211B2D] px-3.5 py-2.5">
+                <p className="font-medium text-white">Google OAuth sign-in succeeded</p>
+                <p className="mt-0.5 text-xs text-[#A8A1B5]">user@example.com · Google</p>
+              </li>
+              <li className="rounded-lg border border-[#322A42] bg-[#211B2D] px-3.5 py-2.5">
+                <p className="font-medium text-white">Verification email sent</p>
+                <p className="mt-0.5 text-xs text-[#A8A1B5]">user@example.com · resend</p>
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-[#A8A1B5]">Sample alerts shown with a placeholder address — no real user email is displayed here.</p>
+          </section>
+        </div>
+      </>)}
+      {alerts.data && (
+        <section className={`${panel} mt-4`} aria-labelledby="provider-alerts-heading">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 id="provider-alerts-heading" className={panelTitle}>Publishing &amp; Source Provider Alerts</h2>
+            {alerts.data.length > 0 && <span className="inline-flex items-center rounded-full bg-[#9333EA]/15 px-2.5 py-1 text-xs font-semibold text-[#C084FC]">{alerts.data.length}</span>}
+          </div>
+          {alerts.data.length === 0 ? <p className="text-sm text-[#A8A1B5]">No new source chapters are pending review.</p> : (
+            <ul className="space-y-2 text-sm">
+              {alerts.data.slice(0, 5).map((alert) => (
+                <li key={alert.id} className="rounded-lg border border-[#322A42] bg-[#211B2D] p-3">
+                  <Link href={alert.url} className="font-medium text-[#C084FC] hover:underline">{alert.comicTitle}</Link>
+                  <p className="mt-1 text-[#A8A1B5]">{alert.availableCount} new chapter{alert.availableCount === 1 ? "" : "s"} available from {alert.sourceName} · {alert.title}</p>
+                </li>
               ))}
             </div>
           )}
+        </section>
+      )}
+      {data && (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <section className={panel} aria-labelledby="popular-heading">
+            <h2 id="popular-heading" className={panelTitle}>Top comics by views</h2>
+            {data.popular.length === 0 ? <p className="mt-3 text-sm text-[#A8A1B5]">No view data yet.</p> : (
+              <ol className="mt-3 space-y-1 text-sm">{data.popular.map((c) => <li key={c.id} className="flex justify-between gap-3"><Link href={`/admin/comics/${c.id}/edit`} className="min-w-0 truncate text-white hover:text-[#C084FC]">{c.title}</Link><span className="shrink-0 text-[#A8A1B5]">{c.views.toLocaleString()}</span></li>)}</ol>
+            )}
+          </section>
+          <section className={panel} aria-labelledby="latest-heading">
+            <h2 id="latest-heading" className={panelTitle}>Latest chapters</h2>
+            {data.latest.length === 0 ? <p className="mt-3 text-sm text-[#A8A1B5]">No chapters yet.</p> : (
+              <ul className="mt-3 space-y-1 text-sm">{data.latest.map((c) => <li key={c.id}><Link href={`/admin/chapters/${c.id}`} className="text-white hover:text-[#C084FC]">{c.comic.title} · Ch. {c.number}</Link> <span className="text-[#A8A1B5]">({c.publishState.toLowerCase()})</span></li>)}</ul>
+            )}
+          </section>
         </div>
-
-        <div className="rounded-xl border border-line bg-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Publishing &amp; Source Provider Alerts</h2>
-            <Link href="/admin/sources" className="text-xs text-primary hover:underline">
-              Open Sources →
-            </Link>
-          </div>
-          {pubErrors.length === 0 && provFailures.length === 0 ? (
-            <p className="text-xs text-muted">
-              No recent publishing errors or upstream provider failures recorded.
-            </p>
-          ) : (
-            <div className="space-y-2 text-xs max-h-56 overflow-y-auto">
-              {pubErrors.slice(0, 5).map((errItem, idx) => (
-                <div key={`pub-${idx}`} className="rounded border border-danger/30 bg-danger/10 p-2.5">
-                  <p className="font-semibold text-danger">
-                    Publish Error [{errItem.sourceId}:{errItem.externalId}] ({errItem.code})
-                  </p>
-                  <p className="text-muted">{errItem.message}</p>
-                </div>
-              ))}
-              {provFailures.slice(0, 5).map((pf, idx) => (
-                <div key={`prov-${idx}`} className="rounded border border-line bg-surface p-2.5">
-                  <p className="font-semibold text-amber-400">
-                    Provider Warning [{pf.sourceId}] ({pf.code})
-                  </p>
-                  <p className="text-muted">{pf.message}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="rounded-xl border border-line bg-card p-4 space-y-2">
-          <h2 className="font-semibold">Top comics by views</h2>
-          {d.popular.map((c: any) => (
-            <div key={c.id} className="flex justify-between text-sm">
-              <span>{c.title}</span>
-              <span className="text-muted">{c.views.toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-        <div className="rounded-xl border border-line bg-card p-4 space-y-2">
-          <h2 className="font-semibold">Latest chapters</h2>
-          {d.latest.map((c: any) => (
-            <div key={c.id} className="flex justify-between text-sm">
-              <span>
-                {c.comic.title} · Ch. {c.number}
-              </span>
-              <span className="text-xs text-muted">{c.publishState}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

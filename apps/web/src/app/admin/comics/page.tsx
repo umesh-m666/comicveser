@@ -14,7 +14,14 @@ export default function AdminComics({ searchParams }: { searchParams: { q?: stri
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h1 className="text-2xl font-bold">Comics</h1><Link href="/admin/comics/new" className={btn}>Add comic</Link></div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h1 className="text-2xl font-bold text-white">Comics</h1><Link href="/admin/comics/new" className={btn}>Add comic</Link></div>
+      <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#9333EA]/40 bg-[#17141F] p-4" aria-labelledby="provider-heading">
+        <div className="min-w-0">
+          <h2 id="provider-heading" className="font-bold text-white">Add a comic from a provider</h2>
+          <p className="mt-1 text-sm text-[#A8A1B5]">Browse WeebCentral, Asura Scans and ComicK catalogues, review a title, then approve and publish it to ComicVerse.</p>
+        </div>
+        <Link href="/admin/comics/new" className="shrink-0 rounded-lg bg-[#9333EA] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110">Browse providers →</Link>
+      </section>
       <form className="mb-4 flex gap-2" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); router.push(`/admin/comics?${new URLSearchParams({ q: String(f.get("q") ?? ""), state: String(f.get("state") ?? "") })}`); }}>
         <input name="q" defaultValue={searchParams.q} placeholder="Search title" className={input} aria-label="Search title" />
         <select name="state" defaultValue={searchParams.state ?? ""} className={input + " max-w-40"} aria-label="Visibility"><option value="">All</option>{["DRAFT", "PUBLISHED", "UNPUBLISHED", "ARCHIVED"].map((s) => <option key={s}>{s}</option>)}</select>

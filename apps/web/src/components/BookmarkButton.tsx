@@ -2,13 +2,32 @@
 import { Bookmark } from "lucide-react";
 import { useLibrary } from "./LibraryProvider";
 
-export default function BookmarkButton({ comicId }: { comicId: string }) {
-  const lib = useLibrary();
-  const on = lib.isBookmarked(comicId);
+export default function BookmarkButton({ comicId, className = "", fill = false }: { comicId: string; className?: string; fill?: boolean }) {
+  const router = useRouter();
+  const [state, setState] = useState<"loading" | "anon" | "on" | "off">("loading");
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api<{ bookmarked: boolean }>(`/user/bookmarks/${comicId}`, { credentials: "include" })
+      .then((r) => setState(r.bookmarked ? "on" : "off"))
+      .catch((e) => setState(e instanceof ApiError && e.status === 401 ? "anon" : "off"));
+  }, [comicId]);
+
+  async function toggle() {
+    if (state === "anon") return router.push("/login");
+    if (state === "loading") return;
+    const next = state === "on" ? "off" : "on"; const prev = state; setState(next); setErr("");
+    try {
+      if (next === "on") await api("/user/bookmarks", { method: "POST", json: { comicId }, credentials: "include" });
+      else await api(`/user/bookmarks/${comicId}`, { method: "DELETE", credentials: "include" });
+    } catch (e) { setState(prev); setErr(e instanceof ApiError ? e.message : "Couldn't update bookmark."); }
+  }
   return (
-    <button type="button" onClick={() => void lib.toggleBookmark(comicId)} aria-pressed={on} className="cv-btn">
-      <Bookmark size={17} className={on ? "fill-[#c084fc] text-[#c084fc]" : ""} aria-hidden />
-      {on ? "Bookmarked" : lib.signedIn || !lib.ready ? "Bookmark" : "Log in to bookmark"}
-    </button>
+    <span className={fill ? "block w-full" : undefined}>
+      <button onClick={toggle} aria-pressed={state === "on"} className={`flex items-center gap-2 rounded-md border border-line px-4 py-2.5 font-semibold hover:bg-card ${fill ? "w-full justify-center" : ""} ${className}`}>
+        <Bookmark size={18} className={state === "on" ? "fill-primary text-primary" : ""} aria-hidden />
+        {state === "on" ? "Bookmarked" : state === "anon" ? "Log in to bookmark" : "Bookmark"}
+      </button>
+      {err && <span role="alert" className="ml-2 text-sm text-danger">{err}</span>}
+    </span>
   );
 }
