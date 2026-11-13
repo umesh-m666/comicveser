@@ -336,22 +336,6 @@ export default function AdminDashboard() {
               ))}
             </>
           )}
-        </section>
-      )}
-      {data && (
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <section className={panel} aria-labelledby="popular-heading">
-            <h2 id="popular-heading" className={panelTitle}>Top comics by views</h2>
-            {data.popular.length === 0 ? <p className="mt-3 text-sm text-[#A8A1B5]">No view data yet.</p> : (
-              <ol className="mt-3 space-y-1 text-sm">{data.popular.map((c) => <li key={c.id} className="flex justify-between gap-3"><Link href={`/admin/comics/${c.id}/edit`} className="min-w-0 truncate text-white hover:text-[#C084FC]">{c.title}</Link><span className="shrink-0 text-[#A8A1B5]">{c.views.toLocaleString()}</span></li>)}</ol>
-            )}
-          </section>
-          <section className={panel} aria-labelledby="latest-heading">
-            <h2 id="latest-heading" className={panelTitle}>Latest chapters</h2>
-            {data.latest.length === 0 ? <p className="mt-3 text-sm text-[#A8A1B5]">No chapters yet.</p> : (
-              <ul className="mt-3 space-y-1 text-sm">{data.latest.map((c) => <li key={c.id}><Link href={`/admin/chapters/${c.id}`} className="text-white hover:text-[#C084FC]">{c.comic.title} · Ch. {c.number}</Link> <span className="text-[#A8A1B5]">({c.publishState.toLowerCase()})</span></li>)}</ul>
-            )}
-          </section>
         </div>
 
         <div

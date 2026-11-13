@@ -4,7 +4,6 @@ export function generateStaticParams() {
   return [{ sourceId: "default" }];
 }
 
-export default function Page() {
-  // SourceCatalogClient reads the route params itself via useParams().
-  return <SourceCatalogClient />;
+export default function Page({ params }: { params: { sourceId: string } }) {
+  return <SourceCatalogClient params={params} />;
 }

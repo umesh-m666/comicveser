@@ -29,7 +29,6 @@ function MangaContent() {
     sort: activeSort,
     page: searchParams.get("page") ?? "1",
   };
-  const hasActiveFilters = Boolean(query.genre || query.status || (query.sort && query.sort !== "updated"));
 
   useEffect(() => {
     setQInput(searchParams.get("q") ?? "");

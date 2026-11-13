@@ -4,7 +4,6 @@ export function generateStaticParams() {
   return [{ sourceId: "default", externalId: "default" }];
 }
 
-export default function Page() {
-  // SourceTitleReviewClient reads the route params itself via useParams().
-  return <SourceTitleReviewClient />;
+export default function Page({ params }: { params: { sourceId: string; externalId: string } }) {
+  return <SourceTitleReviewClient params={params} />;
 }
