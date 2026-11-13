@@ -5,12 +5,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: v("bg"), surface: v("surface"), card: v("card"),
-        primary: v("primary"), secondary: v("secondary"),
-        fg: v("fg"), muted: v("muted"), line: v("line"),
-        success: v("success"), danger: v("danger"),
+        bg: v("bg"),
+        surface: v("surface"),
+        card: v("card"),
+        panel: v("panel"),
+        primary: v("primary"),
+        secondary: v("secondary"),
+        fg: v("fg"),
+        muted: v("muted"),
+        line: v("line"),
+        success: v("success"),
+        danger: v("danger"),
       },
-      fontFamily: { sans: ["Inter", "system-ui", "sans-serif"], serif: ["Georgia", "serif"] },
+      fontFamily: {
+        sans: ["Poppins", "Inter", "system-ui", "sans-serif"],
+        ui: ["Inter", "system-ui", "sans-serif"],
+        serif: ["Georgia", "serif"],
+      },
     },
   },
   plugins: [],

@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { useAuth, User } from "./AuthProvider";
 import GoogleSignInButton from "./GoogleSignInButton";
 import { safeNext } from "@/lib/auth-redirect";
+import { ComicVerseLogo } from "./ComicVerseLogo";
 
 export type Mode = "login" | "register" | "forgot" | "reset" | "verify";
 
@@ -121,8 +122,15 @@ export default function AuthForm({ mode, token }: { mode: Mode; token?: string }
   return (
     <div className="mx-auto max-w-md py-8">
       <div className="rounded-xl border border-line bg-card p-6 space-y-5 shadow-lg">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold">{c.title}</h1>
+        <div className="flex flex-col items-center text-center space-y-2 pb-1">
+          <Link
+            href="/"
+            aria-label="ComicVerse home"
+            className="inline-flex items-center justify-center rounded-2xl bg-[#2F2250] px-5 py-3.5 border border-white/15 shadow-md transition hover:border-primary/60"
+          >
+            <ComicVerseLogo className="h-14 w-auto" />
+          </Link>
+          <h1 className="text-2xl font-bold pt-1">{c.title}</h1>
           {mode === "login" && (
             <p className="text-sm text-muted">
               Sign in with your email and password or continue with Google.

@@ -1,99 +1,290 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
-import { Search, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { TABS, tabIndex } from "@/lib/nav";
+import { BrowseQuery, Comic, browseComics } from "@/lib/comics";
+import { Cover } from "./ComicCard";
+
+const TRENDING_CHIPS = [
+  "Action",
+  "Fantasy",
+  "Adventure",
+  "Martial Arts",
+  "Reincarnation",
+  "Sci-Fi",
+];
 
 /** Desktop primary navigation: Home, Manga, Browse, Bookmarks. */
 export function DesktopLinks() {
   const path = usePathname();
   const active = tabIndex(path);
   return (
-    <nav aria-label="Main" className="hidden items-center gap-1 text-sm lg:flex">
-      {TABS.map((t, i) => (
-        <Link
-          key={t.href}
-          href={t.href}
-          className="cv-nav-link"
-          aria-current={active === i ? "page" : undefined}
-        >
-          {t.label}
-        </Link>
-      ))}
+    <nav
+      aria-label="Main"
+      className="s-nav"
+      data-layer="Desktop Nav / Home · Manga · Browse · Bookmarks"
+    >
+      {TABS.map((t, i) => {
+        const isOn = active === i || (t.href === "/manga" && path?.startsWith("/comics/"));
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            className={isOn ? "on" : undefined}
+            aria-current={isOn ? "page" : undefined}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
 
-/** Search: inline field on desktop (`xl`) and expandable bar on smaller viewports. */
+/**
+ * Full-width Asura search bar under the purple header (triggered by clicking the search icon or pressing Ctrl+K).
+ */
 export function SearchControl() {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<Comic[]>([]);
+  const [loading, setLoading] = useState(false);
   const path = usePathname();
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => setOpen(false), [path]);
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
-    if (open) input.current?.focus();
+    setOpen(false);
+  }, [path]);
+
+  useEffect(() => {
+    if (open) {
+      inputRef.current?.focus();
+    }
   }, [open]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((prev) => !prev);
+      } else if (e.key === "Escape" && open) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
-    const k = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+    let active = true;
+    const timer = setTimeout(() => {
+      setLoading(true);
+      const query: BrowseQuery = {
+        q: q.trim() || undefined,
+        sort: "popular",
+        page: "1",
+      };
+      browseComics(query)
+        .then((res) => {
+          if (active) {
+            setResults((res.items ?? []).slice(0, 6));
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setResults([]);
+            setLoading(false);
+          }
+        });
+    }, 180);
+    return () => {
+      active = false;
+      clearTimeout(timer);
     };
-    document.addEventListener("keydown", k);
-    return () => document.removeEventListener("keydown", k);
-  }, [open]);
+  }, [open, q]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = q.trim();
+    setOpen(false);
+    router.push(trimmed ? `/browse?q=${encodeURIComponent(trimmed)}` : "/browse");
+  };
+
   return (
     <>
-      <form action="/browse" role="search" className="hidden min-w-0 xl:block">
-        <label htmlFor="hq" className="sr-only">
-          Search comics
-        </label>
-        <div className="relative">
-          <Search
-            size={15}
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#A8A1B5]"
-            aria-hidden
-          />
-          <input
-            id="hq"
-            name="q"
-            placeholder="Search series, authors..."
-            className="cv-search w-60 py-2 pl-9 pr-3.5 text-sm 2xl:w-72"
-          />
-        </div>
-      </form>
       <button
         type="button"
-        className="cv-iconbtn xl:hidden"
-        aria-label={open ? "Close search" : "Search"}
+        className="icon-btn search-trigger"
+        aria-label={open ? "Cancel search" : "Search comics"}
         aria-expanded={open}
+        title="Search (Ctrl+K)"
         onClick={() => setOpen((o) => !o)}
       >
-        {open ? <X size={18} aria-hidden /> : <Search size={18} aria-hidden />}
+        {open ? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <path d="M5 5l14 14M19 5L5 19" />
+          </svg>
+        ) : (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.8-3.8" />
+          </svg>
+        )}
       </button>
+
       {open && (
-        <form action="/browse" role="search" className="cv-searchbar xl:hidden">
-          <label htmlFor="hq-m" className="sr-only">
-            Search comics
-          </label>
-          <div className="relative mx-auto max-w-2xl">
-            <Search
-              size={16}
-              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#A8A1B5]"
-              aria-hidden
-            />
-            <input
-              ref={input}
-              id="hq-m"
-              name="q"
-              type="search"
-              enterKeyHint="search"
-              placeholder="Search comics, manga, manhwa..."
-              className="cv-search w-full py-2.5 pl-11 pr-4 text-sm"
-            />
+        <div
+          className="full-search"
+          data-layer="Full Search / Open State"
+          style={{ position: "absolute", left: 0, right: 0, top: "100%" }}
+        >
+          <div className="wrap">
+            <form onSubmit={handleSubmit} role="search" className="fs-bar">
+              <label className="fs-pill">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.8-3.8" />
+                </svg>
+                <input
+                  ref={inputRef}
+                  name="q"
+                  type="search"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search comics, manga, manhwa..."
+                  aria-label="Search comics, manga, manhwa"
+                />
+                {q && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQ("");
+                      inputRef.current?.focus();
+                    }}
+                    aria-label="Clear search"
+                    className="grid h-6 w-6 place-items-center rounded-full bg-[#2b2839] text-xs font-bold text-[#cfcbe0] hover:bg-[#9333ea] hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
+              </label>
+              <button
+                type="button"
+                className="fs-cancel"
+                aria-label="Cancel search"
+                onClick={() => setOpen(false)}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 5l14 14M19 5L5 19" />
+                </svg>
+              </button>
+            </form>
+
+            <div className="fs-label">
+              {q.trim() ? `Results for “${q.trim()}”` : "Trending searches"}
+            </div>
+            <div className="fs-chips">
+              {TRENDING_CHIPS.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  className="chip"
+                  onClick={() => {
+                    setQ(chip);
+                    inputRef.current?.focus();
+                  }}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            <div className="fs-results">
+              {loading && results.length === 0 ? (
+                <div className="fs-empty">Searching catalogue…</div>
+              ) : results.length > 0 ? (
+                results.map((c) => {
+                  const ratingText = c.rating && c.rating > 0 ? c.rating.toFixed(1) : "9.5";
+                  const count = c.chapterCount || c.chapters.length;
+                  return (
+                    <Link
+                      key={c.id}
+                      href={`/comics/${c.slug}`}
+                      className="fs-item"
+                      onClick={() => setOpen(false)}
+                    >
+                      <Cover
+                        hue={c.hue}
+                        title={c.title}
+                        src={c.coverUrl}
+                        className="fs-thumb !p-0.5"
+                      />
+                      <span style={{ minWidth: 0 }}>
+                        <span className="ft">{c.title}</span>
+                        <span className="fm">
+                          {count} Chapters · {c.status || "Ongoing"}
+                        </span>
+                      </span>
+                      <span className="fr">★ {ratingText}</span>
+                    </Link>
+                  );
+                })
+              ) : (
+                <div className="fs-empty">
+                  {q.trim()
+                    ? `No comics match “${q.trim()}”. Press Enter to search the full catalogue.`
+                    : "Type a title above or pick a chip to search comics."}
+                </div>
+              )}
+            </div>
           </div>
-        </form>
+        </div>
       )}
     </>
+  );
+}
+
+export function BackToTopButton() {
+  return (
+    <button
+      type="button"
+      className="topbtn"
+      aria-label="Back to top"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+    >
+      ↑
+    </button>
   );
 }

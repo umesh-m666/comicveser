@@ -13,6 +13,11 @@ const CATEGORIES = [
   "GENERAL",
 ];
 
+/**
+ * Asura Admin Reviews & Reports Page (#frame-admin-reviews):
+ * .a-top header, .stat-grid summary badges, filter bar, issue reports list with response composer,
+ * and Recent Reader Reviews moderation.
+ */
 export default function AdminReviews() {
   const [reportsData, setReportsData] = useState<any>({ items: [], summary: {} });
   const [reviews, setReviews] = useState<any[]>([]);
@@ -74,241 +79,266 @@ export default function AdminReviews() {
   const reports: any[] = reportsData?.items ?? [];
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold">Issue Reports, Admin Messages &amp; Reviews</h1>
-        <p className="text-sm text-muted">
-          Review user-submitted bug reports, broken chapter alerts, login issues, and send direct responses back to readers.
-        </p>
+    <div>
+      <div className="a-top" data-layer="Admin Topbar">
+        <div>
+          <h1>Reviews &amp; Reports</h1>
+          <div className="sub">
+            Moderate reader reviews and chapter issue reports in one queue.
+          </div>
+        </div>
       </div>
 
-      {/* Summary Badges */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      {/* Stat Cards */}
+      <div className="stat-grid" data-layer="Stat Cards">
         {[
           ["Total Reports", summary.total ?? reports.length],
           ["Open / Pending", summary.open ?? 0],
           ["Unread Alerts", summary.unread ?? 0],
           ["Resolved", summary.resolved ?? 0],
-          ["Dismissed", summary.dismissed ?? 0],
         ].map(([label, count]) => (
-          <div key={String(label)} className="rounded-xl border border-line bg-card p-3.5">
-            <p className="text-xs text-muted">{label}</p>
-            <p className="mt-1 text-xl font-bold">{Number(count).toLocaleString()}</p>
+          <div key={String(label)} className="stat">
+            <div className="k">{label}</div>
+            <div className="v">{Number(count).toLocaleString()}</div>
           </div>
         ))}
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-card p-4 text-xs">
-        <input
-          type="search"
-          id="admin-reports-search"
-          aria-label="Search issue reports by user, email, subject, description, or ID"
-          placeholder="Search by user, email, subject, description, ID..."
-          value={q}
-          onChange={(e) => {
-            setPage(1);
-            setQ(e.target.value);
-          }}
-          className="min-w-[220px] flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-fg outline-none focus:border-primary"
-        />
-        <select
-          id="admin-reports-status"
-          aria-label="Filter issue reports by status"
-          value={statusFilter}
-          onChange={(e) => {
-            setPage(1);
-            setStatusFilter(e.target.value);
-          }}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-fg"
-        >
-          <option value="ALL">All Statuses</option>
-          <option value="OPEN">Open / Pending</option>
-          <option value="RESOLVED">Resolved</option>
-          <option value="DISMISSED">Dismissed</option>
-        </select>
-        <select
-          id="admin-reports-category"
-          aria-label="Filter issue reports by category"
-          value={categoryFilter}
-          onChange={(e) => {
-            setPage(1);
-            setCategoryFilter(e.target.value);
-          }}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-fg"
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c === "ALL" ? "All Categories" : c}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-center gap-2 text-muted cursor-pointer">
-          <input
-            type="checkbox"
-            checked={unreadOnly}
+      <div className="a-panel" data-layer="Reports Filter">
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <label className="s-search flex-1" style={{ background: "#242133" }}>
+            <span aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              id="admin-reports-search"
+              aria-label="Search issue reports by user, email, subject, description, or ID"
+              placeholder="Search by user, email, subject, description, ID..."
+              value={q}
+              onChange={(e) => {
+                setPage(1);
+                setQ(e.target.value);
+              }}
+            />
+          </label>
+          <select
+            id="admin-reports-status"
+            aria-label="Filter issue reports by status"
+            value={statusFilter}
             onChange={(e) => {
               setPage(1);
-              setUnreadOnly(e.target.checked);
+              setStatusFilter(e.target.value);
             }}
-          />
-          Unread only
-        </label>
+            className="rounded-lg border border-[#342f49] bg-[#242133] px-3 py-2 text-white"
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="OPEN">Open / Pending</option>
+            <option value="RESOLVED">Resolved</option>
+            <option value="DISMISSED">Dismissed</option>
+          </select>
+          <select
+            id="admin-reports-category"
+            aria-label="Filter issue reports by category"
+            value={categoryFilter}
+            onChange={(e) => {
+              setPage(1);
+              setCategoryFilter(e.target.value);
+            }}
+            className="rounded-lg border border-[#342f49] bg-[#242133] px-3 py-2 text-white"
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c === "ALL" ? "All Categories" : c}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-muted cursor-pointer">
+            <input
+              type="checkbox"
+              checked={unreadOnly}
+              onChange={(e) => {
+                setPage(1);
+                setUnreadOnly(e.target.checked);
+              }}
+            />
+            Unread only
+          </label>
+        </div>
       </div>
 
       {/* Issue Reports List */}
-      <div className="space-y-3">
+      <div className="a-panel" data-layer="Reports Queue">
+        <h3>Reader reports</h3>
+        <div className="psub">Issues reported from the chapter reader and site</div>
         {reports.length === 0 ? (
-          <p className="rounded-xl border border-line bg-card p-8 text-center text-sm text-muted">
-            No issue reports match your current filters.
-          </p>
+          <p className="text-sm text-muted">No issue reports match your current filters.</p>
         ) : (
-          reports.map((r) => {
-            const draft = replyDrafts[r.id] ?? r.adminResponse ?? "";
-            return (
-              <div
-                key={r.id}
-                className={`rounded-xl border p-4 space-y-3 text-sm ${
-                  !r.isRead && r.status === "OPEN"
-                    ? "border-primary/50 bg-card"
-                    : "border-line bg-card/70"
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!r.isRead && (
-                        <span className="rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-white">
-                          UNREAD
+          <div className="space-y-3">
+            {reports.map((r) => {
+              const draft = replyDrafts[r.id] ?? r.adminResponse ?? "";
+              return (
+                <div
+                  key={r.id}
+                  className="svc-alert space-y-2.5"
+                  style={
+                    !r.isRead && r.status === "OPEN"
+                      ? { borderColor: "rgba(168,85,247,.55)" }
+                      : undefined
+                  }
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!r.isRead && <span className="tag purple">UNREAD</span>}
+                        <span className="tag grey">{r.category ?? "GENERAL"}</span>
+                        <strong className="text-white">{r.subject || "Issue Report"}</strong>
+                        <span
+                          className={`tag ${
+                            r.status === "RESOLVED"
+                              ? "green"
+                              : r.status === "DISMISSED"
+                              ? "grey"
+                              : "amber"
+                          }`}
+                        >
+                          {r.status}
                         </span>
-                      )}
-                      <span className="rounded bg-surface px-2 py-0.5 text-xs font-semibold text-primary">
-                        {r.category ?? "GENERAL"}
-                      </span>
-                      <span className="font-bold text-fg">{r.subject || "Issue Report"}</span>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          r.status === "RESOLVED"
-                            ? "bg-emerald-500/15 text-emerald-400"
-                            : r.status === "DISMISSED"
-                            ? "bg-zinc-500/15 text-muted"
-                            : "bg-amber-500/15 text-amber-400"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
+                      </div>
+                      <p className="text-xs text-muted m-0">
+                        Submitted by <strong className="text-white">@{r.username}</strong>{" "}
+                        {r.email ? `(${r.email})` : ""} · Target: {r.targetType}:{r.targetId}
+                        {r.comicId ? ` · Comic: ${r.comicId}` : ""}
+                        {r.chapterId ? ` · Chapter: ${r.chapterId}` : ""} ·{" "}
+                        {new Date(r.createdAt).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted">
-                      Submitted by <strong className="text-fg">@{r.username}</strong>{" "}
-                      {r.email ? `(${r.email})` : ""} · Target: {r.targetType}:{r.targetId}
-                      {r.comicId ? ` · Comic: ${r.comicId}` : ""}
-                      {r.chapterId ? ` · Chapter: ${r.chapterId}` : ""} ·{" "}
-                      {new Date(r.createdAt).toLocaleString()}
-                    </p>
+
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {r.status !== "RESOLVED" && (
+                        <button
+                          type="button"
+                          disabled={busyId === r.id}
+                          onClick={() => updateReport(r.id, "RESOLVED", draft || undefined)}
+                          className="rowbtn"
+                          style={{ background: "var(--purple)", color: "#fff" }}
+                        >
+                          Resolve
+                        </button>
+                      )}
+                      {r.status !== "DISMISSED" && (
+                        <button
+                          type="button"
+                          disabled={busyId === r.id}
+                          onClick={() => updateReport(r.id, "DISMISSED", draft || undefined)}
+                          className="rowbtn"
+                        >
+                          Dismiss
+                        </button>
+                      )}
+                      {r.status !== "OPEN" && (
+                        <button
+                          type="button"
+                          disabled={busyId === r.id}
+                          onClick={() => updateReport(r.id, "OPEN", draft || undefined)}
+                          className="rowbtn"
+                        >
+                          Reopen
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    {r.status !== "RESOLVED" && (
-                      <button
-                        disabled={busyId === r.id}
-                        onClick={() => updateReport(r.id, "RESOLVED", draft || undefined)}
-                        className="rounded-lg bg-emerald-600 px-3 py-1.5 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-                      >
-                        Resolve
-                      </button>
-                    )}
-                    {r.status !== "DISMISSED" && (
-                      <button
-                        disabled={busyId === r.id}
-                        onClick={() => updateReport(r.id, "DISMISSED", draft || undefined)}
-                        className="rounded-lg border border-line px-3 py-1.5 text-muted hover:text-fg disabled:opacity-50"
-                      >
-                        Dismiss
-                      </button>
-                    )}
-                    {r.status !== "OPEN" && (
-                      <button
-                        disabled={busyId === r.id}
-                        onClick={() => updateReport(r.id, "OPEN", draft || undefined)}
-                        className="rounded-lg border border-line px-3 py-1.5 text-amber-400 hover:bg-surface disabled:opacity-50"
-                      >
-                        Reopen
-                      </button>
-                    )}
+                  <p className="rounded-lg bg-[#131118] p-3 text-xs leading-relaxed text-white whitespace-pre-wrap m-0">
+                    {r.description || r.reason}
+                  </p>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="text"
+                      aria-label={`Admin response for report ${r.id}`}
+                      placeholder="Write a response to notify the reporting user..."
+                      value={draft}
+                      onChange={(e) => setReplyDrafts({ ...replyDrafts, [r.id]: e.target.value })}
+                      className="set-input flex-1 !h-9 text-xs"
+                    />
+                    <button
+                      type="button"
+                      disabled={busyId === r.id || !draft.trim()}
+                      onClick={() => updateReport(r.id, "RESOLVED", draft.trim())}
+                      className="pillbtn !ml-0"
+                    >
+                      Send Response &amp; Resolve
+                    </button>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                <p className="rounded-lg bg-surface p-3 text-xs leading-relaxed text-fg whitespace-pre-wrap">
-                  {r.description || r.reason}
-                </p>
-
-                {/* Admin Response Composer */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    type="text"
-                    aria-label={`Admin response for report ${r.id}`}
-                    placeholder="Write a response to notify the reporting user..."
-                    value={draft}
-                    onChange={(e) => setReplyDrafts({ ...replyDrafts, [r.id]: e.target.value })}
-                    className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs text-fg outline-none focus:border-primary"
-                  />
-                  <button
-                    type="button"
-                    disabled={busyId === r.id || !draft.trim()}
-                    onClick={() => updateReport(r.id, "RESOLVED", draft.trim())}
-                    className="rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-white hover:bg-primary-hover disabled:opacity-50"
-                  >
-                    Send Response &amp; Resolve
-                  </button>
-                </div>
-              </div>
-            );
-          })
+        {(reportsData?.pages ?? 1) > 1 && (
+          <div className="pager">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ‹ Previous
+            </button>
+            <button type="button" className="on">
+              Page {page} of {reportsData.pages}
+            </button>
+            <button
+              type="button"
+              disabled={page >= reportsData.pages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next ›
+            </button>
+          </div>
         )}
       </div>
 
-      {/* Pagination */}
-      {(reportsData?.pages ?? 1) > 1 && (
-        <div className="flex items-center justify-center gap-3 text-xs">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="rounded border border-line px-3 py-1.5 disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="text-muted">
-            Page {page} of {reportsData.pages}
-          </span>
-          <button
-            disabled={page >= reportsData.pages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded border border-line px-3 py-1.5 disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      )}
-
       {/* Recent Reviews Moderation */}
-      <div className="space-y-3 pt-4 border-t border-line">
-        <h2 className="text-xl font-bold">Recent Reader Reviews</h2>
-        {reviews.map((r) => (
-          <div
-            key={r.id}
-            className="flex items-start justify-between gap-3 rounded-lg border border-line bg-card p-3 text-sm"
-          >
-            <div>
-              <p className="text-xs text-muted">
-                @{r.user.username} on <strong>{r.comic.title}</strong>
-              </p>
-              <p>{r.body}</p>
-            </div>
-            <button onClick={() => delReview(r.id)} className="text-xs text-danger">
-              Delete
-            </button>
+      <div className="a-panel" data-layer="Review Moderation">
+        <h3>Recent Reader Reviews</h3>
+        <div className="psub">Reviews posted on comic detail pages</div>
+        {reviews.length === 0 ? (
+          <p className="text-sm text-muted">No reviews yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {reviews.map((r) => (
+              <div key={r.id} className="upd" style={{ alignItems: "flex-start" }}>
+                <div className="u-main">
+                  <h3 style={{ whiteSpace: "normal" }}>
+                    {r.comic.title}{" "}
+                    <span style={{ color: "var(--gold)", fontSize: 12 }}>★★★★★</span>
+                  </h3>
+                  <p
+                    style={{
+                      margin: "0 0 4px",
+                      fontSize: 13,
+                      color: "#ddd9ea",
+                      fontFamily: "Inter",
+                    }}
+                  >
+                    “{r.body}”
+                  </p>
+                  <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                    by @{r.user.username}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => delReview(r.id)}
+                  className="rowbtn danger"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

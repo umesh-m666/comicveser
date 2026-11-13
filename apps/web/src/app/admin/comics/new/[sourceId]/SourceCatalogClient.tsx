@@ -11,7 +11,14 @@ type Provider = {
   displayName: string;
   officialUrl: string;
   enabled: boolean;
-  capabilities: { types: string[]; languages: string[] | null; search: boolean; details: boolean; chapters: boolean; pages: boolean };
+  capabilities: {
+    types: string[];
+    languages: string[] | null;
+    search: boolean;
+    details: boolean;
+    chapters: boolean;
+    pages: boolean;
+  };
   notes: string[];
 };
 
@@ -19,37 +26,77 @@ export default function ProviderCatalogPage(props?: { params?: { sourceId?: stri
   const routeParams = useParams<{ sourceId: string }>();
   const params = props?.params ?? routeParams;
   const sourceId = String(params.sourceId ?? "");
-  const { data, error, loading } = useLoad<{ enabled: boolean; sources: Provider[] }>("/admin/sources");
+  const { data, error, loading } = useLoad<{ enabled: boolean; sources: Provider[] }>(
+    "/admin/sources",
+  );
   const provider = data?.sources.find((item) => item.id === sourceId);
 
   return (
-    <main className="space-y-5">
-      <Link href="/admin/comics/new" className="inline-flex items-center gap-2 text-sm text-muted hover:text-primary">← All providers</Link>
+    <div className="space-y-4">
+      <Link href="/admin/comics/new" className="rowbtn">
+        ← All providers
+      </Link>
       <State loading={loading} error={error} />
-      {data && !provider && <p role="alert" className="rounded-lg border border-line p-5 text-sm">The requested provider was not found.</p>}
+
+      {data && !provider && (
+        <p role="alert" className="a-panel text-sm">
+          The requested provider was not found.
+        </p>
+      )}
+
       {provider && (
         <>
-          <header className="rounded-xl border border-line bg-card p-5 sm:p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Provider catalogue</p>
-                <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{provider.displayName}</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Search titles, browse all matches returned by the provider, filter by type or review state, and inspect a title on its own page.</p>
-              </div>
-              <a href={provider.officialUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline underline-offset-4">Open provider website ↗</a>
+          <header className="a-panel" data-layer="Provider Catalogue">
+            <div
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: ".14em",
+                color: "var(--purple-2)",
+                marginBottom: 5,
+              }}
+            >
+              PROVIDER CATALOGUE
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {provider.capabilities.types.map((type) => <span key={type} className="rounded-full border border-line px-3 py-1 text-xs text-muted">{type.toUpperCase()}</span>)}
-              {provider.capabilities.languages?.map((language) => <span key={language} className="rounded-full border border-line px-3 py-1 text-xs text-muted">{language.toUpperCase()}</span>)}
+            <h1 style={{ fontSize: 21, fontWeight: 700, margin: "0 0 4px", color: "#fff" }}>
+              {provider.displayName}
+            </h1>
+            <div className="psub" style={{ lineHeight: 1.6, marginBottom: 10 }}>
+              Search titles, browse all matches returned by the provider, filter by type or review state, and inspect a title on its own page.
+              <br />
+              <a
+                href={provider.officialUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--purple-2)", textDecoration: "underline" }}
+              >
+                Open provider website ↗
+              </a>
+            </div>
+            <div className="prov-types">
+              {provider.capabilities.types.map((type) => (
+                <span key={type}>{type.toUpperCase()}</span>
+              ))}
+              {provider.capabilities.languages?.map((language) => (
+                <span key={language}>{language.toUpperCase()}</span>
+              ))}
             </div>
           </header>
+
           {!provider.enabled || !data?.enabled ? (
-            <p role="status" className="rounded-lg border border-line bg-card p-5 text-sm text-muted">This provider is currently disabled. Enable it in Admin → Sources before searching its catalogue.</p>
+            <p role="status" className="a-panel text-sm text-muted">
+              This provider is currently disabled. Enable it in Admin → Sources before searching its catalogue.
+            </p>
           ) : (
-            <SourceCatalog sourceId={provider.id} sourceName={provider.displayName} types={provider.capabilities.types} enabled={Boolean(provider.enabled && data?.enabled)} />
+            <SourceCatalog
+              sourceId={provider.id}
+              sourceName={provider.displayName}
+              types={provider.capabilities.types}
+              enabled={Boolean(provider.enabled && data?.enabled)}
+            />
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }

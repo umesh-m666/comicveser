@@ -1,15 +1,16 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
-import { Bell, BookOpen, Check, CheckCheck, ExternalLink, MessageSquare, ShieldAlert, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { timeAgo } from "@/lib/comics";
+import { ApiComic, toComic } from "@/lib/comics";
+import { coverSrc, hueOf } from "@/lib/media";
 import { act } from "@/lib/useApi";
 import { useDismiss } from "@/lib/useDismiss";
 import { useAuth } from "./AuthProvider";
+import { Cover } from "./ComicCard";
 
-interface PopupNotificationItem {
+export interface PopupNotificationItem {
   id: string;
   type: string;
   title: string;
@@ -20,8 +21,12 @@ interface PopupNotificationItem {
   meta?: {
     adminOnly?: boolean;
     event?: string;
+    comicId?: string;
     comicTitle?: string;
+    comicSlug?: string;
+    coverUrl?: string | null;
     providerName?: string;
+    chapterNumber?: number | null;
     displayNumber?: string;
     originalLabel?: string | null;
     status?: "PUBLISHED" | "FAILED";
@@ -36,43 +41,141 @@ interface NotificationsApiResponse {
   prefs: { newChapter: boolean };
 }
 
-type PopupTab = "all" | "chapters" | "messages";
+type PopupTab = "all" | "chapters" | "comments";
 
-const POPUP_TABS: { key: PopupTab; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "chapters", label: "Chapters" },
-  { key: "messages", label: "Messages" },
-];
+/** Compact relative timestamp matching image_b7315e.png ("5h", "2d", "15m", "Just now"). */
+export function shortTimeAgo(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t) || t <= 0) return "";
+  const m = Math.max(0, Math.round((now - t) / 60000));
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.round(h / 24);
+  if (d < 31) return `${d}d`;
+  const w = Math.round(d / 7);
+  return `${w}w`;
+}
 
-const TYPE_BADGES: Record<string, string> = {
-  NEW_CHAPTER: "Chapter",
-  BOOKMARK_UPDATE: "Bookmark",
-  CREATOR_ANNOUNCEMENT: "Creator",
-  REVIEW_REPLY: "Reply",
-  ACCOUNT: "Account",
-  PLATFORM: "Platform",
-};
+export function isChapterNotif(n: PopupNotificationItem): boolean {
+  if (n.type === "NEW_CHAPTER" || n.type === "BOOKMARK_UPDATE") return true;
+  const ev = n.meta?.event;
+  if (
+    ev === "AUTO_CHAPTER_PUBLISHED" ||
+    ev === "BOOKMARK_NEW_CHAPTER" ||
+    ev === "MANUAL_CHAPTER_PUBLISHED"
+  ) {
+    return true;
+  }
+  if (/new chapter/i.test(n.title) || /\bchapter\s*:\s*[0-9.]+/i.test(n.body)) {
+    return true;
+  }
+  return false;
+}
+
+export function parseNotifDisplay(
+  n: PopupNotificationItem,
+  comicLookup: Map<string, { title: string; slug: string; coverUrl: string | null }>,
+): {
+  isChapter: boolean;
+  comicTitle: string;
+  chapterText: string;
+  coverUrl: string | null;
+  hueKey: string;
+} {
+  const chap = isChapterNotif(n);
+
+  // Extract comic title
+  let comicTitle = n.meta?.comicTitle?.trim() || "";
+  if (!comicTitle) {
+    const m1 = n.title.match(/New Chapter Released!\s*[—:-]\s*(.+)$/i);
+    const m2 = n.title.match(/New chapter automatically published:\s*(.+)$/i);
+    const m3 = n.body.match(/Comic:\s*([^·\n]+)/i);
+    comicTitle = (m1?.[1] || m2?.[1] || m3?.[1] || n.title).trim();
+  }
+
+  // Extract chapter number/label
+  let chapterText = "";
+  if (n.meta?.displayNumber) {
+    chapterText = `Chapter ${n.meta.displayNumber}`;
+  } else if (n.meta?.chapterNumber !== undefined && n.meta?.chapterNumber !== null) {
+    chapterText = `Chapter ${n.meta.chapterNumber}`;
+  } else {
+    const cm1 = n.body.match(/Chapter:\s*(?:Chapter\s*)?([^·\n(]+)/i);
+    const cm2 = n.body.match(/Chapter\s+([0-9.]+)/i);
+    const cm3 = n.title.match(/Chapter\s+([0-9.]+)/i);
+    const rawNum = (cm1?.[1] || cm2?.[1] || cm3?.[1] || "").trim();
+    chapterText = rawNum
+      ? /^chapter/i.test(rawNum)
+        ? rawNum
+        : `Chapter ${rawNum}`
+      : n.body;
+  }
+
+  // Match coverUrl from meta or comicLookup
+  let matchedCover: string | null = n.meta?.coverUrl ? coverSrc(n.meta.coverUrl) ?? null : null;
+  let slugOrTitle = n.meta?.comicSlug || comicTitle;
+
+  if (!matchedCover) {
+    const candidates: string[] = [];
+    if (n.meta?.comicId) candidates.push(n.meta.comicId.toLowerCase());
+    if (n.meta?.comicSlug) candidates.push(n.meta.comicSlug.toLowerCase());
+    if (n.href) {
+      const hm = n.href.match(/\/comics\/([^/?#]+)/i);
+      if (hm?.[1]) candidates.push(decodeURIComponent(hm[1]).toLowerCase());
+    }
+    if (comicTitle) {
+      candidates.push(comicTitle.toLowerCase());
+      candidates.push(
+        comicTitle
+          .toLowerCase()
+          .replace(/^official\s+/i, "")
+          .replace(/[^a-z0-9]+/g, ""),
+      );
+    }
+    for (const key of candidates) {
+      const hit = comicLookup.get(key);
+      if (hit) {
+        if (hit.coverUrl) matchedCover = hit.coverUrl;
+        slugOrTitle = hit.slug || hit.title;
+        break;
+      }
+    }
+  }
+
+  return {
+    isChapter: chap,
+    comicTitle,
+    chapterText,
+    coverUrl: matchedCover,
+    hueKey: slugOrTitle || n.id,
+  };
+}
 
 /**
- * Interactive Notification Bell Popup (Desktop Dropdown + Mobile Bottom Sheet).
- * Uses the unified ComicVerse palette:
- * - Dark background: #100E16
- * - Card background: #211B2D
- * - Primary purple: #9333EA
- * - Secondary purple: #A855F7
- * - Text: #FFFFFF
- * - Muted text: #A8A1B5
+ * Asura Notifications Dropdown (.notif-panel) matching image_b7315e.png 1:1:
+ * - Header: "Notifications" + red unread count badge + "Likes" switch + "Mark all read"
+ * - Tabs: All (N) | Chapters (N) | Comments (N)
+ * - Chapter rows: Comic Cover thumbnail (40x52px) + bold Comic Title + purple "New:" Chapter X + short time ("5h", "2d")
+ * - Footer: "View All"
  */
 export default function NotificationBell() {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<PopupTab>("all");
+  const [likesOnly, setLikesOnly] = useState(false);
   const [unread, setUnread] = useState(0);
-  const [items, setItems] = useState<PopupNotificationItem[]>([]);
+  const [allItems, setAllItems] = useState<PopupNotificationItem[]>([]);
+  const [comicLookup, setComicLookup] = useState<
+    Map<string, { title: string; slug: string; coverUrl: string | null }>
+  >(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
 
   const close = useCallback(() => setOpen(false), []);
   useDismiss(containerRef, open, close);
@@ -81,23 +184,51 @@ export default function NotificationBell() {
     setOpen(false);
   }, [pathname]);
 
+  // Load catalogue covers once so every chapter notification displays its comic cover thumbnail
+  useEffect(() => {
+    let active = true;
+    api<{ items: ApiComic[] }>("/comics?pageSize=48&sort=popular", { cache: "no-store" })
+      .then((r) => {
+        if (!active) return;
+        const map = new Map<string, { title: string; slug: string; coverUrl: string | null }>();
+        for (const raw of r.items ?? []) {
+          const c = toComic(raw);
+          const entry = { title: c.title, slug: c.slug, coverUrl: c.coverUrl };
+          map.set(c.id.toLowerCase(), entry);
+          map.set(c.slug.toLowerCase(), entry);
+          map.set(c.title.toLowerCase(), entry);
+          map.set(
+            c.title
+              .toLowerCase()
+              .replace(/^official\s+/i, "")
+              .replace(/[^a-z0-9]+/g, ""),
+            entry,
+          );
+        }
+        setComicLookup(map);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const fetchNotifications = useCallback(
-    async (activeTab: PopupTab, showSpinner = false) => {
+    async (showSpinner = false) => {
       if (!user) {
         setUnread(0);
-        setItems([]);
+        setAllItems([]);
         return;
       }
       if (showSpinner) setLoading(true);
       setError(false);
       try {
-        const query = activeTab === "all" ? "?page=1" : `?page=1&group=${activeTab}`;
-        const res = await api<NotificationsApiResponse>(`/user/notifications${query}`, {
+        const res = await api<NotificationsApiResponse>("/user/notifications?page=1", {
           credentials: "include",
           cache: "no-store",
         });
         setUnread(res.unread ?? 0);
-        setItems(res.items ?? []);
+        setAllItems(res.items ?? []);
       } catch {
         setError(true);
       } finally {
@@ -107,16 +238,15 @@ export default function NotificationBell() {
     [user],
   );
 
-  // Initial unread badge fetch & live event listener
   useEffect(() => {
     if (!user) {
       setUnread(0);
-      setItems([]);
+      setAllItems([]);
       return;
     }
     let mounted = true;
     const reload = () => {
-      if (mounted) void fetchNotifications(tab, false);
+      if (mounted) void fetchNotifications(false);
     };
     reload();
     window.addEventListener("cv:notifications", reload);
@@ -124,299 +254,231 @@ export default function NotificationBell() {
       mounted = false;
       window.removeEventListener("cv:notifications", reload);
     };
-  }, [user, tab, fetchNotifications]);
+  }, [user, fetchNotifications]);
 
-  // Reload list when popup opens or tab changes
   useEffect(() => {
     if (open && user) {
-      void fetchNotifications(tab, true);
+      void fetchNotifications(true);
     }
-  }, [open, tab, user, fetchNotifications]);
+  }, [open, user, fetchNotifications]);
 
   const markSingleRead = async (id: string) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, readAt: it.readAt ?? new Date().toISOString() } : it)));
+    setAllItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, readAt: it.readAt ?? new Date().toISOString() } : it)),
+    );
     setUnread((u) => Math.max(0, u - 1));
     try {
       await act("/user/notifications/read", "POST", { ids: [id] });
       window.dispatchEvent(new Event("cv:notifications"));
     } catch {
-      void fetchNotifications(tab, false);
+      void fetchNotifications(false);
     }
   };
 
   const markAllRead = async () => {
-    setItems((prev) => prev.map((it) => ({ ...it, readAt: it.readAt ?? new Date().toISOString() })));
+    setAllItems((prev) => prev.map((it) => ({ ...it, readAt: it.readAt ?? new Date().toISOString() })));
     setUnread(0);
     try {
       await act("/user/notifications/read", "POST", {});
       window.dispatchEvent(new Event("cv:notifications"));
     } catch {
-      void fetchNotifications(tab, false);
+      void fetchNotifications(false);
     }
   };
 
+  const counts = useMemo(() => {
+    let chapters = 0;
+    let comments = 0;
+    for (const n of allItems) {
+      if (isChapterNotif(n)) chapters++;
+      else comments++;
+    }
+    return {
+      all: allItems.length,
+      chapters,
+      comments,
+    };
+  }, [allItems]);
+
+  const visibleItems = useMemo(() => {
+    return allItems.filter((n) => {
+      const chap = isChapterNotif(n);
+      if (likesOnly && chap) return false;
+      if (tab === "chapters") return chap;
+      if (tab === "comments") return !chap;
+      return true;
+    });
+  }, [allItems, tab, likesOnly]);
+
   if (!user) return null;
 
-  const emptyMessage =
-    tab === "chapters"
-      ? "No chapter updates yet. Bookmark a comic to get notified as soon as new chapters release."
-      : tab === "messages"
-      ? "No messages yet. Account notices, creator updates, and admin responses appear here."
-      : "You're all caught up! New chapter releases and platform messages will appear here.";
-
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="notif-wrap">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="cv-iconbtn"
+        className="icon-btn"
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Bell size={18} aria-hidden />
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 9.5a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+          <path d="M10 20a2.2 2.2 0 0 0 4 0" />
+        </svg>
         {unread > 0 && (
-          <span className="cv-badge" aria-hidden>
+          <span className="bdg" aria-hidden="true">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
 
-      {/* Mobile backdrop scrim */}
-      {open && (
-        <div
-          aria-hidden="true"
-          onClick={close}
-          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-xs transition-opacity sm:hidden"
-        />
-      )}
-
-      {/* Popup Panel: Responsive Bottom Sheet on Mobile, Dropdown on Desktop */}
       <div
         role="dialog"
         aria-label="Notifications"
-        data-open={open}
-        className={`fixed inset-x-0 bottom-0 z-50 flex max-h-[82vh] flex-col overflow-hidden rounded-t-2xl border border-[#322A42] bg-[#100E16] text-white shadow-[0_24px_64px_rgba(0,0,0,0.85)] transition-all duration-200 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-[calc(100%+0.65rem)] sm:max-h-[34rem] sm:w-[25rem] sm:rounded-2xl ${
-          open
-            ? " pointer-events-auto translate-y-0 opacity-100 scale-100 visible"
-            : " pointer-events-none translate-y-3 sm:-translate-y-2 opacity-0 scale-95 invisible"
-        }`}
+        hidden={!open}
+        data-layer="Notifications Panel"
+        className="notif-panel"
       >
-        {/* Mobile grabber handle */}
-        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-[#322A42] sm:hidden" aria-hidden />
-
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#322A42] px-4 py-3.5">
-          <div className="flex items-center gap-2">
-            <Bell size={17} className="text-[#A855F7]" aria-hidden />
-            <h2 className="text-sm font-bold tracking-tight text-white">Notifications</h2>
-            {unread > 0 && (
-              <span className="rounded-full bg-[#9333EA] px-2 py-0.5 text-[11px] font-extrabold text-white">
-                {unread} new
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {unread > 0 && (
-              <button
-                type="button"
-                onClick={() => void markAllRead()}
-                className="inline-flex items-center gap-1 rounded-lg bg-[#211B2D] px-2.5 py-1 text-xs font-semibold text-[#A855F7] transition hover:bg-[#9333EA] hover:text-white"
-              >
-                <CheckCheck size={13} aria-hidden />
-                Mark all read
-              </button>
-            )}
+        <div className="np-head">
+          <b>Notifications</b>
+          {unread > 0 && <span className="np-count">{unread}</span>}
+          <span className="np-likes">
+            Likes{" "}
             <button
               type="button"
-              onClick={close}
-              aria-label="Close notifications"
-              className="rounded-lg p-1 text-[#A8A1B5] hover:bg-[#211B2D] hover:text-white sm:hidden"
+              className="switch"
+              role="switch"
+              aria-checked={likesOnly}
+              aria-label="Show likes only"
+              onClick={() => setLikesOnly((v) => !v)}
             >
-              <X size={16} aria-hidden />
+              <i />
             </button>
-          </div>
+          </span>
+          <button type="button" className="np-mark" onClick={() => void markAllRead()}>
+            Mark all read
+          </button>
         </div>
 
-        {/* Three Tabs: All | Chapters | Messages */}
-        <div role="tablist" aria-label="Notification categories" className="grid grid-cols-3 gap-1.5 border-b border-[#322A42] bg-[#100E16] px-4 py-2.5">
-          {POPUP_TABS.map((t) => {
-            const active = tab === t.key;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(t.key)}
-                className={`rounded-xl py-1.5 text-xs font-bold transition ${
-                  active
-                    ? "bg-[#9333EA] text-white shadow-[0_4px_14px_rgba(147,51,234,0.45)]"
-                    : "bg-[#211B2D] text-[#A8A1B5] hover:text-white"
-                }`}
-              >
-                {t.label}
-              </button>
-            );
-          })}
+        <div className="np-tabs" role="tablist" aria-label="Notification categories">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "all"}
+            className={tab === "all" ? "on" : undefined}
+            onClick={() => setTab("all")}
+          >
+            All ({counts.all})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "chapters"}
+            className={tab === "chapters" ? "on" : undefined}
+            onClick={() => setTab("chapters")}
+          >
+            Chapters ({counts.chapters})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "comments"}
+            className={tab === "comments" ? "on" : undefined}
+            onClick={() => setTab("comments")}
+          >
+            Comments ({counts.comments})
+          </button>
         </div>
 
-        {/* Notification List Body */}
-        <div className="min-h-[14rem] flex-1 overflow-y-auto px-3 py-2.5">
-          {loading ? (
-            <div className="space-y-2.5 py-1" aria-busy="true">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl bg-[#211B2D]" />
-              ))}
+        <div className="np-list">
+          {loading && allItems.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: "var(--muted)", fontSize: 12.5 }}>
+              Loading notifications…
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-[#322A42] bg-[#211B2D] p-6 text-center text-xs text-[#A8A1B5]">
-              <p className="text-white font-semibold">Couldn&apos;t load notifications</p>
+            <div style={{ padding: 16, textAlign: "center", color: "var(--muted)", fontSize: 12.5 }}>
+              Couldn&apos;t load notifications.{" "}
               <button
                 type="button"
-                onClick={() => void fetchNotifications(tab, true)}
-                className="mt-2 rounded-lg bg-[#9333EA] px-3 py-1.5 font-semibold text-white hover:bg-[#A855F7]"
+                onClick={() => void fetchNotifications(true)}
+                className="np-mark"
               >
                 Retry
               </button>
             </div>
-          ) : items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-[#322A42] bg-[#211B2D] px-5 py-8 text-center">
-              {tab === "messages" ? (
-                <MessageSquare size={26} className="text-[#A855F7]" aria-hidden />
-              ) : (
-                <BookOpen size={26} className="text-[#A855F7]" aria-hidden />
-              )}
-              <p className="mt-2.5 text-xs leading-relaxed text-[#A8A1B5]">{emptyMessage}</p>
+          ) : visibleItems.length === 0 ? (
+            <div style={{ padding: 16, textAlign: "center", color: "var(--muted)", fontSize: 12.5 }}>
+              Nothing here yet.
             </div>
           ) : (
-            <ul className="space-y-2">
-              {items.slice(0, 12).map((n) => {
-                const isUnread = !n.readAt;
-                const isAdminAlert = n.meta?.adminOnly === true || n.title.startsWith("New chapter automatically published") || n.title.startsWith("[Admin Alert]");
-                const isFailed = n.meta?.status === "FAILED" || n.title.includes("failed");
-                const badgeLabel = isAdminAlert
-                  ? isFailed
-                    ? "Admin · Sync Failed"
-                    : "Admin · Auto-Published"
-                  : TYPE_BADGES[n.type] ?? "Update";
+            visibleItems.slice(0, 12).map((n) => {
+              const isUnread = !n.readAt;
+              const info = parseNotifDisplay(n, comicLookup);
 
-                return (
-                  <li
-                    key={n.id}
-                    className={`group relative rounded-xl border p-3 transition ${
-                      isUnread
-                        ? "border-[#A855F7]/70 bg-[#211B2D] shadow-[0_0_0_1px_rgba(168,85,247,0.2)]"
-                        : "border-[#322A42] bg-[#211B2D]/80 hover:border-[#9333EA]/50"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5">
-                        {isUnread && (
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full bg-[#A855F7] shadow-[0_0_8px_#A855F7]"
-                            aria-label="Unread"
-                          />
-                        )}
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                            isFailed
-                              ? "bg-rose-500/20 text-rose-300"
-                              : isAdminAlert
-                              ? "bg-[#9333EA]/30 text-[#E9D5FF]"
-                              : "bg-[#9333EA]/20 text-[#A855F7]"
-                          }`}
-                        >
-                          {isAdminAlert ? <ShieldAlert size={11} aria-hidden /> : <Sparkles size={11} aria-hidden />}
-                          {badgeLabel}
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  className={`np-item${isUnread ? " unread" : ""}`}
+                  onClick={() => {
+                    if (isUnread) void markSingleRead(n.id);
+                    close();
+                    if (n.href) router.push(n.href);
+                    else router.push("/profile/notifications");
+                  }}
+                >
+                  <Cover
+                    hue={hueOf(info.hueKey)}
+                    title={info.comicTitle}
+                    src={info.coverUrl}
+                    className="np-thumb border-0 !p-0.5"
+                  />
+                  <span style={{ minWidth: 0 }}>
+                    {info.isChapter ? (
+                      <>
+                        <span className="nt truncate">{info.comicTitle}</span>
+                        <span className="ns truncate">
+                          <b>New:</b> {info.chapterText}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-[#A8A1B5]">{timeAgo(n.createdAt)}</span>
-                        {isUnread && (
-                          <button
-                            type="button"
-                            onClick={() => void markSingleRead(n.id)}
-                            title="Mark as read"
-                            aria-label="Mark notification as read"
-                            className="rounded-md p-1 text-[#A8A1B5] hover:bg-[#100E16] hover:text-white"
-                          >
-                            <Check size={13} aria-hidden />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-1.5">
-                      {n.href ? (
-                        <Link
-                          href={n.href}
-                          onClick={() => {
-                            if (isUnread) void markSingleRead(n.id);
-                            close();
-                          }}
-                          className="block text-xs font-bold text-white hover:text-[#A855F7]"
-                        >
-                          {n.title}
-                        </Link>
-                      ) : (
-                        <p className="text-xs font-bold text-white">{n.title}</p>
-                      )}
-                      <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-[#A8A1B5]">{n.body}</p>
-                    </div>
-
-                    {(n.href || n.meta?.sourceUrl) && (
-                      <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-                        {n.href && (
-                          <Link
-                            href={n.href}
-                            onClick={() => {
-                              if (isUnread) void markSingleRead(n.id);
-                              close();
-                            }}
-                            className="text-[#A855F7] hover:underline"
-                          >
-                            Open chapter / details →
-                          </Link>
-                        )}
-                        {isAdmin && n.meta?.sourceUrl && (
-                          <a
-                            href={n.meta.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[#A8A1B5] hover:text-white"
-                          >
-                            Source <ExternalLink size={11} aria-hidden />
-                          </a>
-                        )}
-                      </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="nt truncate">{n.title}</span>
+                        <span className="ns line-clamp-2">{n.body}</span>
+                      </>
                     )}
-                  </li>
-                );
-              })}
-            </ul>
+                  </span>
+                  <span suppressHydrationWarning className="nw">
+                    {shortTimeAgo(n.createdAt)}
+                  </span>
+                </button>
+              );
+            })
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-[#322A42] bg-[#100E16] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3">
-          <Link
-            href={tab === "all" ? "/profile/notifications" : `/profile/notifications?tab=${tab}`}
-            onClick={close}
-            className="inline-flex flex-1 items-center justify-center rounded-xl bg-[#9333EA] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#A855F7]"
-          >
-            View All Notifications
-          </Link>
-          {isAdmin && (
-            <Link
-              href="/admin/sources"
-              onClick={close}
-              className="inline-flex items-center justify-center rounded-xl border border-[#322A42] bg-[#211B2D] px-3 py-2 text-xs font-bold text-[#A855F7] transition hover:border-[#A855F7] hover:text-white"
-            >
-              Admin Sync
-            </Link>
-          )}
-        </div>
+        <Link
+          href={
+            tab === "chapters"
+              ? "/profile/notifications?tab=chapters"
+              : tab === "comments"
+              ? "/profile/notifications?tab=messages"
+              : "/profile/notifications"
+          }
+          onClick={close}
+          className="np-foot"
+        >
+          View All
+        </Link>
       </div>
     </div>
   );

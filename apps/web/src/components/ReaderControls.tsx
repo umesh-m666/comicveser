@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { ArrowLeft, ArrowUp, Bookmark, Check, ChevronLeft, ChevronRight, ExternalLink, List, Maximize, Minimize, Settings, X } from "lucide-react";
 import { useLibrary } from "./LibraryProvider";
+import { ComicVerseMark } from "./ComicVerseLogo";
 
 export interface ReaderNb { id: string; number: number; displayNumber?: string; label?: string }
 export type ReaderMode = "vertical" | "paged" | "rtl";
@@ -59,6 +60,7 @@ export default function ReaderControls(p: Props) {
     <div onClick={(e) => { e.stopPropagation(); p.onInteract(); }} onKeyDown={p.onInteract}>
       <header className="rd-bar rd-bar-top" data-visible={p.visible}>
         <div className="mx-auto flex max-w-3xl items-center gap-1 px-2 py-1.5">
+          <Link href="/" className="rd-iconbtn !p-1.5" aria-label="ComicVerse home" title="ComicVerse Home"><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#2F2250] p-1 border border-white/20"><ComicVerseMark className="h-full w-full" /></span></Link>
           <Link href={p.backHref} className="rd-iconbtn" aria-label="Back to comic details"><ArrowLeft size={20} /></Link>
           <div className="min-w-0 flex-1 px-1">
             {/* Comic title is always white. The chapter label turns purple once the chapter is finished. */}

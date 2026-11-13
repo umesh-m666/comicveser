@@ -1,18 +1,42 @@
 import Link from "next/link";
 import AccountLink from "./AccountLink";
-import { DesktopLinks, SearchControl } from "./NavClient";
+import { BackToTopButton, DesktopLinks, SearchControl } from "./NavClient";
+import { ComicVerseMark } from "./ComicVerseLogo";
 
 export function Header() {
   return (
-    <header className="cv-header sticky top-0 z-30">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 md:gap-4">
-        <Link href="/" className="flex shrink-0 items-center text-lg font-extrabold tracking-tight text-white" aria-label="ComicVerse home">
-          <span className="cv-logo-mark">C</span>
-          <span className="max-[380px]:hidden">Comic<span className="text-[#A855F7]">Verse</span></span>
+    <header className="s-header" data-layer="Header / Purple Nav">
+      <div className="wrap">
+        <Link href="/" className="s-logo" aria-label="ComicVerse home">
+          <span className="mark" aria-hidden="true">
+            <ComicVerseMark className="cv-mark-svg" />
+          </span>
+          <span>
+            Comic<em>Verse</em>
+          </span>
         </Link>
         <DesktopLinks />
-        <div className="ml-auto flex min-w-0 items-center gap-2.5">
+        <div className="s-head-r">
           <SearchControl />
+          <Link
+            href="/profile/bookmarks"
+            className="s-book hidden lg:inline-flex"
+            aria-label="Bookmarks"
+            title="Bookmarks"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ width: 20, height: 20 }}
+            >
+              <path d="M6.5 3.5h11V21L12 16.6 6.5 21z" />
+            </svg>
+          </Link>
           <AccountLink />
         </div>
       </div>
@@ -21,16 +45,35 @@ export function Header() {
 }
 
 export function Footer() {
-  const f = [["About","/about"],["Contact","/contact"],["Privacy","/privacy"],["Terms","/terms"],["Copyright","/copyright-policy"]];
   return (
-    <footer className="mt-20 border-t border-line bg-[#100E16] pb-28 lg:pb-8">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-9 text-sm text-[#A8A1B5]">
-        <div><p className="font-bold text-white">Comic<span className="text-[#A855F7]">Verse</span></p><p className="mt-1 text-xs text-[#A8A1B5]">Stories worth staying up for.</p></div>
-        <nav aria-label="Footer" className="flex flex-wrap gap-4">
-          {f.map(([l, h]) => <Link key={h} href={h} className="text-[#A8A1B5] hover:text-white">{l}</Link>)}
-        </nav>
-        <span className="w-full text-xs text-[#A8A1B5] md:w-auto">© 2026 ComicVerse. All series are original or licensed.</span>
-      </div>
-    </footer>
+    <>
+      <footer className="s-footer" data-layer="Footer">
+        <div className="wrap">
+          <div className="flogo">
+            <span className="mark" aria-hidden="true">
+              <ComicVerseMark className="cv-mark-svg" />
+            </span>
+            Comic<em>Verse</em>
+          </div>
+          <nav aria-label="Footer">
+            <Link href="/privacy">Privacy Policy</Link>
+            <Link href="/terms">Terms of Service</Link>
+            <Link href="/copyright-policy">DMCA</Link>
+            <Link href="/about">About</Link>
+            <Link href="/contact">Report Issue</Link>
+          </nav>
+          <div className="soc">
+            <a className="dc" href="https://discord.com" target="_blank" rel="noopener noreferrer">
+              Discord
+            </a>
+            <a className="rd" href="https://reddit.com" target="_blank" rel="noopener noreferrer">
+              Reddit <span className="new">NEW</span>
+            </a>
+          </div>
+          <div className="copy">© 2026 ComicVerse. All rights reserved.</div>
+        </div>
+      </footer>
+      <BackToTopButton />
+    </>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ComicVerseMark } from "@/components/ComicVerseLogo";
 import { useState } from "react";
 import { Badge, State, btn, input, table } from "@/components/admin/ui";
 import { ApiError } from "@/lib/api";
@@ -13,7 +14,7 @@ export default function CreatorDashboard() {
   if (me.error) return me.error instanceof ApiError && me.error.status === 401 ? <p>Please <Link href="/login" className="text-primary">log in</Link> to use the creator portal.</p> : <State loading={false} error={me.error} />;
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">Creator portal</h1><State loading={me.loading} error={null} />
+      <div className="mb-4 flex items-center gap-3"><span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#2F2250] p-1.5 border border-white/20"><ComicVerseMark className="h-full w-full" /></span><h1 className="text-2xl font-bold m-0">Creator portal</h1></div><State loading={me.loading} error={null} />
       {me.data?.status === "NONE" && (
         <form className="max-w-sm space-y-3" onSubmit={async (e) => { e.preventDefault(); setErr(""); try { await act("/creator/apply", "POST", { displayName: new FormData(e.currentTarget).get("displayName") }); me.reload(); } catch (x) { setErr(errMsg(x)); } }}>
           <p className="text-muted">Publish your own original or licensed comics. An admin reviews every application.</p>

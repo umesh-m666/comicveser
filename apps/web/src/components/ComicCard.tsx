@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Bookmark, Star } from "lucide-react";
 import { Comic } from "@/lib/comics";
+import { ComicVerseMark } from "./ComicVerseLogo";
 import { useLibrary } from "./LibraryProvider";
 
 export function Cover({
@@ -25,37 +25,46 @@ export function Cover({
     <div
       role="img"
       aria-label={`Cover of ${title}`}
-      className={`cv-cover relative flex items-end overflow-hidden bg-[#181424] p-3 ${className}`}
+      className={`cv-cover relative flex items-end overflow-hidden bg-[#181424] p-2.5 ${className}`}
       style={{
         background: `linear-gradient(160deg, hsl(${hue} 55% 38%), hsl(${(hue + 42) % 360} 50% 10%))`,
       }}
     >
       {!showImage && (
-        <span className="relative z-10 line-clamp-3 text-sm font-extrabold leading-tight text-white drop-shadow-lg">
-          {title}
-        </span>
+        <>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center p-2 opacity-85"
+          >
+            <ComicVerseMark className="max-h-[54%] max-w-[68%] drop-shadow-md" />
+          </span>
+          <span className="relative z-10 line-clamp-2 text-[11px] font-bold leading-tight text-white drop-shadow-lg">
+            {title}
+          </span>
+        </>
       )}
       {showImage && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src!}
-          alt={title}
+          alt={`${title} cover art`}
           onError={() => setImgError(true)}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           referrerPolicy="no-referrer"
-          className="absolute inset-0 z-20 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          className="absolute inset-0 z-20 h-full w-full object-cover"
         />
       )}
     </div>
   );
 }
 
-const STATUS_PILL_STYLE: Record<string, string> = {
-  Ongoing: "bg-[#9333EA]/25 text-[#C084FC]",
-  Completed: "bg-emerald-500/20 text-emerald-300",
-  Hiatus: "bg-amber-500/20 text-amber-300",
-};
+function statusPillClass(status: string): string {
+  const lower = (status || "Ongoing").toLowerCase();
+  if (lower === "completed") return "done";
+  if (lower === "hiatus") return "hiatus";
+  return "on";
+}
 
 export function BookmarkToggle({ comicId, className = "" }: { comicId: string; className?: string }) {
   const lib = useLibrary();
@@ -64,24 +73,38 @@ export function BookmarkToggle({ comicId, className = "" }: { comicId: string; c
     <button
       type="button"
       aria-pressed={on}
-      aria-label={on ? "Remove bookmark" : "Bookmark"}
+      aria-label={on ? "Bookmarked" : "Bookmark"}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         void lib.toggleBookmark(comicId);
       }}
-      className={`inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${
-        on
-          ? "bg-[#2A253B] text-[#E2DFEC] hover:bg-[#352F49]"
-          : "bg-[#8B3DFF] text-white shadow-[0_4px_14px_rgba(139,61,255,0.35)] hover:bg-[#9333EA]"
-      } ${className}`}
+      className={`bm-toggle ${on ? "done" : ""} ${className}`.trim()}
     >
-      <Bookmark size={14} className={on ? "fill-white text-white" : "text-white"} aria-hidden />
+      <svg
+        viewBox="0 0 24 24"
+        fill={on ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M6.5 3.5h11V21L12 16.6 6.5 21z" />
+      </svg>
       <span>{on ? "Bookmarked" : "Bookmark"}</span>
     </button>
   );
 }
 
+/**
+ * Unified Asura Comic Card (.ucard):
+ * Used identically on Home (Trending), Browse, Manga, and Detail recommendations, desktop + mobile:
+ * 1. Cover + top-right ★ rating badge (.rate-badge)
+ * 2. Title (h3)
+ * 3. Meta pills row (.cmeta): Chapters count pill (.chpill) + Status pill (.stpill)
+ * 4. Full-width Bookmark / Bookmarked toggle button (.bm-toggle)
+ */
 export default function ComicCard({ comic, priority = false }: { comic: Comic; priority?: boolean }) {
   const lib = useLibrary();
   const progress = lib.progressFor(comic.id);
@@ -90,9 +113,9 @@ export default function ComicCard({ comic, priority = false }: { comic: Comic; p
   const statusLabel = comic.status || "Ongoing";
 
   return (
-    <article className="cv-card-hover group relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-[#262035] bg-[#171322] shadow-[0_8px_24px_rgba(0,0,0,0.45)] transition duration-200 hover:border-[#9333EA]/60">
-      <Link href={`/comics/${comic.slug}`} className="block" aria-label={comic.title}>
-        <div className="relative aspect-[2/3] w-full overflow-hidden">
+    <div className="ucard" data-t={comic.title}>
+      <Link href={`/comics/${comic.slug}`} className="cov-btn" aria-label={`Open ${comic.title}`}>
+        <span className="cov">
           <Cover
             hue={comic.hue}
             title={comic.title}
@@ -100,46 +123,30 @@ export default function ComicCard({ comic, priority = false }: { comic: Comic; p
             priority={priority}
             className="h-full w-full rounded-none border-0"
           />
-          <span className="absolute right-2 top-2 z-30 flex items-center gap-1 rounded-md bg-[#100E16]/88 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur-xs">
-            <Star size={11} className="fill-[#FBBF24] text-[#FBBF24]" aria-hidden />
-            {ratingText}
-          </span>
+          <span className="rate-badge">★ {ratingText}</span>
           {progress && (
-            <span className="absolute bottom-2 left-2 z-30 rounded-md bg-[#9333EA]/90 px-2 py-0.5 text-[10px] font-bold text-white shadow-xs">
+            <span
+              className="absolute bottom-2 left-2 z-30 rounded bg-[#9333ea]/90 px-1.5 py-0.5 text-[10px] font-bold text-white"
+              style={{ fontFamily: "Inter, sans-serif" }}
+            >
               Ch. {progress.displayNumber ?? progress.number}
             </span>
           )}
-        </div>
+        </span>
       </Link>
 
-      <div className="flex flex-1 flex-col justify-between p-3 sm:p-3.5">
-        <div>
-          <Link href={`/comics/${comic.slug}`} className="block">
-            <h3
-              className="truncate text-sm font-bold text-white transition-colors group-hover:text-[#C084FC]"
-              title={comic.title}
-            >
-              {comic.title}
-            </h3>
-          </Link>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="rounded-md bg-[#252034] px-2 py-0.5 text-[11px] font-semibold text-[#D4D0DC]">
-              {count} {count === 1 ? "Chapter" : "Chapters"}
-            </span>
-            <span
-              className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                STATUS_PILL_STYLE[statusLabel] ?? "bg-[#9333EA]/25 text-[#C084FC]"
-              }`}
-            >
-              {statusLabel}
-            </span>
-          </div>
+      <div className="cinfo">
+        <Link href={`/comics/${comic.slug}`}>
+          <h3 title={comic.title}>{comic.title}</h3>
+        </Link>
+        <div className="cmeta">
+          <span className="chpill">
+            {count} {count === 1 ? "Chapter" : "Chapters"}
+          </span>
+          <span className={`stpill ${statusPillClass(statusLabel)}`}>{statusLabel}</span>
         </div>
-
-        <div className="mt-3">
-          <BookmarkToggle comicId={comic.id} />
-        </div>
+        <BookmarkToggle comicId={comic.id} />
       </div>
-    </article>
+    </div>
   );
 }

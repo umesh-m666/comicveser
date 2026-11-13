@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { ComicVerseMark } from "./ComicVerseLogo";
 import { useEffect, useState } from "react";
 
 interface Nb { id: string; number: number }
@@ -17,6 +18,7 @@ export default function NovelReader({ ch }: { ch: NovelChapter }) {
   return (
     <div className="-mx-4 -my-6 min-h-screen px-4 py-6" style={{ background: p.dark ? "var(--bg)" : "#f6f1e7", color: p.dark ? "var(--fg)" : "#1c1b1a" }}>
       <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 pb-4 text-sm">
+        <Link href="/" className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#2F2250] p-1 border border-white/20" aria-label="ComicVerse Home" title="ComicVerse Home"><ComicVerseMark className="h-full w-full" /></Link>
         <Link href={`/novels/${ch.novel.slug}`} className="underline">← {ch.novel.title}</Link>
         <label>Size <input type="range" min={14} max={28} value={p.size} onChange={(e) => set({ size: +e.target.value })} aria-label="Font size" /></label>
         <label>Spacing <input type="range" min={1.3} max={2.2} step={0.1} value={p.line} onChange={(e) => set({ line: +e.target.value })} aria-label="Line spacing" /></label>

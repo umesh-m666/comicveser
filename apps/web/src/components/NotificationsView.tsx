@@ -2,43 +2,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bell, BookOpen, CheckCheck, ExternalLink, MessageSquare, RefreshCw, ShieldAlert } from "lucide-react";
-import ProfileNav from "@/components/ProfileNav";
+import { RefreshCw } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
-import { timeAgo } from "@/lib/comics";
+import { ApiComic, timeAgo, toComic } from "@/lib/comics";
+import { hueOf } from "@/lib/media";
 import { act } from "@/lib/useApi";
 import { useAuth } from "./AuthProvider";
+import { Cover } from "./ComicCard";
+import { ComicVerseMark } from "./ComicVerseLogo";
+import { PopupNotificationItem, parseNotifDisplay, shortTimeAgo } from "./NotificationBell";
 import ReportButton from "./ReportButton";
 
-interface Note {
-  id: string;
-  type: string;
-  title: string;
-  body: string;
-  href: string | null;
-  readAt: string | null;
-  createdAt: string;
-  meta?: {
-    adminOnly?: boolean;
-    event?: string;
-    comicId?: string;
-    comicTitle?: string;
-    comicSlug?: string;
-    providerId?: string;
-    providerName?: string;
-    chapterId?: string | null;
-    chapterNumber?: number | null;
-    displayNumber?: string;
-    originalLabel?: string | null;
-    chapterTitle?: string | null;
-    sourceReleaseDate?: string | null;
-    publishedAt?: string | null;
-    status?: "PUBLISHED" | "FAILED";
-    chapterUrl?: string | null;
-    sourceUrl?: string | null;
-    errorMessage?: string | null;
-  } | null;
-}
+type Note = PopupNotificationItem;
 
 interface Resp {
   unread: number;
@@ -84,6 +59,11 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const PAGE = 20;
 
+/**
+ * Asura Messages & Notifications View (#frame-messages & #frame-mobile-messages):
+ * Renders chapter notifications in the exact image_b7315e.png style (Comic cover + bold title + purple "New: Chapter X")
+ * and includes the 2-column thread + conversation layout for Messages.
+ */
 export default function NotificationsView(props?: {
   group?: "messages" | "alerts" | "chapters";
   title?: string;
@@ -105,6 +85,9 @@ export default function NotificationsView(props?: {
   const [myReports, setMyReports] = useState<UserIssueReport[]>([]);
   const [adminAlerts, setAdminAlerts] = useState<Note[]>([]);
   const [adminFilter, setAdminFilter] = useState<AdminFilter>("all");
+  const [comicLookup, setComicLookup] = useState<
+    Map<string, { title: string; slug: string; coverUrl: string | null }>
+  >(new Map());
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncNotice, setSyncNotice] = useState("");
   const [meta, setMeta] = useState<{ unread: number; newChapter: boolean } | null>(null);
@@ -113,6 +96,36 @@ export default function NotificationsView(props?: {
   const [state, setState] = useState<"loading" | "ok" | "error" | "anon">("loading");
   const [loadingMore, setLoadingMore] = useState(false);
   const [msg, setMsg] = useState("");
+  const [activeThreadIdx, setActiveThreadIdx] = useState(0);
+  const [quickMsg, setQuickMsg] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    api<{ items: ApiComic[] }>("/comics?pageSize=48&sort=popular", { cache: "no-store" })
+      .then((r) => {
+        if (!active) return;
+        const map = new Map<string, { title: string; slug: string; coverUrl: string | null }>();
+        for (const raw of r.items ?? []) {
+          const c = toComic(raw);
+          const entry = { title: c.title, slug: c.slug, coverUrl: c.coverUrl };
+          map.set(c.id.toLowerCase(), entry);
+          map.set(c.slug.toLowerCase(), entry);
+          map.set(c.title.toLowerCase(), entry);
+          map.set(
+            c.title
+              .toLowerCase()
+              .replace(/^official\s+/i, "")
+              .replace(/[^a-z0-9]+/g, ""),
+            entry,
+          );
+        }
+        setComicLookup(map);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const load = useCallback(
     async (pg: number, replace: boolean) => {
@@ -185,6 +198,30 @@ export default function NotificationsView(props?: {
     }
   };
 
+  const sendMessageToAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = quickMsg.trim();
+    if (text.length < 3) return;
+    try {
+      await api("/reports", {
+        method: "POST",
+        body: JSON.stringify({
+          targetType: "platform",
+          targetId: "general",
+          category: "GENERAL",
+          subject: text.slice(0, 80),
+          description: text,
+          reason: text,
+        }),
+      });
+      setQuickMsg("");
+      setMsg("Message sent to ComicVerse Admin.");
+      await load(1, true);
+    } catch {
+      setMsg("Could not send message.");
+    }
+  };
+
   const empty =
     props?.emptyText ??
     (tab === "messages"
@@ -195,53 +232,107 @@ export default function NotificationsView(props?: {
 
   if (state === "anon") {
     return (
-      <p>
+      <div className="panel empty-note">
         Please{" "}
-        <Link href="/login" className="text-[#A855F7]">
+        <Link href="/login" style={{ color: "var(--purple-2)", fontWeight: 600 }}>
           log in
         </Link>{" "}
         to see your notifications.
-      </p>
+      </div>
     );
   }
 
+  const threads = [
+    {
+      name: "ComicVerse Team",
+      sub: "Official announcements & replies",
+      when: items[0] ? timeAgo(items[0].createdAt) : "Now",
+      unread: meta?.unread ?? 0,
+      snip: items[0]?.title ?? "Welcome to ComicVerse! Chapter updates and notices appear here.",
+      bubbles:
+        items.length > 0
+          ? items.slice(0, 6).map((n) => ({
+              side: "them" as const,
+              text: `${n.title} — ${n.body}`,
+              href: n.href,
+            }))
+          : [
+              {
+                side: "them" as const,
+                text: "Welcome to ComicVerse! Bookmark your favorite series to receive instant chapter notifications.",
+                href: "/browse",
+              },
+            ],
+    },
+    ...myReports.map((r) => ({
+      name: `Support · ${r.category}`,
+      sub: r.subject,
+      when: timeAgo(r.createdAt) || "Reported",
+      unread: r.adminResponse && r.status === "RESOLVED" ? 1 : 0,
+      snip: r.adminResponse ? `Admin: ${r.adminResponse}` : r.description,
+      bubbles: [
+        { side: "me" as const, text: `[${r.category}] ${r.subject}: ${r.description}`, href: null },
+        ...(r.adminResponse
+          ? [{ side: "them" as const, text: `Admin Reply: ${r.adminResponse}`, href: null }]
+          : [
+              {
+                side: "them" as const,
+                text: `Status: ${r.status}. Our team has received your report and will reply here.`,
+                href: null,
+              },
+            ]),
+      ],
+    })),
+  ];
+  const currentThread = threads[activeThreadIdx] ?? threads[0];
+
   return (
-    <div className="space-y-6">
-      <ProfileNav active="/profile/notifications" />
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2.5 text-2xl font-extrabold text-white">
-          {tab === "messages" ? (
-            <MessageSquare size={24} className="text-[#A855F7]" aria-hidden />
-          ) : tab === "chapters" ? (
-            <BookOpen size={24} className="text-[#A855F7]" aria-hidden />
-          ) : (
-            <Bell size={24} className="text-[#A855F7]" aria-hidden />
-          )}
-          {props?.title ?? (tab === "messages" ? "Messages" : tab === "chapters" ? "Chapter Updates" : "Notifications")}
+    <div className="space-y-5">
+      <div className="panel-h2" style={{ marginBottom: 4 }}>
+        <span className="ic" aria-hidden="true">
+          {tab === "messages" ? "✉" : tab === "chapters" ? "▤" : "🔔"}
+        </span>
+        <h1 style={{ fontSize: 21, margin: 0, fontWeight: 700, color: "#fff" }}>
+          {props?.title ??
+            (tab === "messages"
+              ? "Messages"
+              : tab === "chapters"
+              ? "Chapter Updates"
+              : "Notifications")}
         </h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-lg border border-line bg-[#211B2D] px-3 py-1.5">
+        {meta && meta.unread > 0 && <span className="np-count">{meta.unread}</span>}
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div className="rowbtn">
             <ReportButton targetType="platform" targetId="general" label="+ Report an Issue to Admin" />
           </div>
           {meta && meta.unread > 0 && (
-            <button type="button" className="cv-btn !min-h-9 text-xs" onClick={() => void markAll()}>
-              <CheckCheck size={14} aria-hidden />
-              Mark all as read ({meta.unread})
+            <button type="button" className="pillbtn ghost" onClick={() => void markAll()}>
+              Mark all read ({meta.unread})
             </button>
           )}
         </div>
       </div>
 
       {/* Primary Tabs: All | Chapters | Messages */}
-      <div role="tablist" aria-label="Inbox" className="mb-4 flex gap-2">
+      <div role="tablist" aria-label="Inbox" className="browse-tools" style={{ marginBottom: 0 }}>
         {TABS.map((t) => (
           <Link
             key={t.key}
             role="tab"
             aria-selected={tab === t.key}
             data-active={tab === t.key}
-            href={t.key === "all" ? "/profile/notifications" : `/profile/notifications?tab=${t.key}`}
-            className="cv-chip !px-4 !py-1.5 text-[13px]"
+            href={
+              t.key === "all" ? "/profile/notifications" : `/profile/notifications?tab=${t.key}`
+            }
+            className={`chip${tab === t.key ? " on" : ""}`}
           >
             {t.label}
           </Link>
@@ -260,98 +351,215 @@ export default function NotificationsView(props?: {
           We couldn&apos;t load your notifications. Refresh to try again.
         </p>
       )}
+
       {state === "ok" && meta && (
         <>
-          <label className="mb-4 flex items-center gap-2 text-sm text-white">
-            <input
-              type="checkbox"
-              checked={meta.newChapter}
-              onChange={async (e) => {
-                const v = e.target.checked;
-                setMeta({ ...meta, newChapter: v });
-                try {
-                  await act("/user/notification-settings", "PUT", { newChapter: v });
-                  setMsg("Saved.");
-                } catch {
-                  setMeta({ ...meta, newChapter: !v });
-                  setMsg("Couldn't save that setting.");
-                }
-              }}
-            />
-            Notify me when a bookmarked comic gets a new chapter
-          </label>
-          {msg && (
-            <p role="status" className="mb-2 text-sm text-success">
-              {msg}
-            </p>
-          )}
-          {items.length === 0 ? (
-            <div className="cv-panel p-8 text-center text-sm text-[#A8A1B5]">{empty}</div>
-          ) : (
-            <ul className="space-y-2">
-              {items.map((n) => (
-                <li
-                  key={n.id}
-                  className={`rounded-xl border p-3.5 transition ${
-                    n.readAt
-                      ? "border-line bg-[#211B2D]"
-                      : "border-[#A855F7]/70 bg-[#211B2D] shadow-[0_0_0_1px_rgba(168,85,247,.18)]"
-                  }`}
+          {tab === "messages" && (
+            <div className="msg-layout" data-layer="Messages Layout">
+              <section className="panel msg-list" data-layer="Thread List" style={{ padding: 10 }}>
+                {threads.map((t, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`msg-thread${i === activeThreadIdx ? " on" : ""}`}
+                    onClick={() => setActiveThreadIdx(i)}
+                  >
+                    <span className="mt-av">{t.name === "ComicVerse Team" ? <ComicVerseMark className="cv-mark-svg" /> : t.name.slice(0, 2).toUpperCase()}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="mt">
+                        {t.name}{" "}
+                        {t.unread > 0 && <span className="msg-unread">{t.unread}</span>}
+                      </span>
+                      <span className="ms">{t.snip}</span>
+                    </span>
+                    <span className="mw">{t.when}</span>
+                  </button>
+                ))}
+              </section>
+
+              <section className="panel" data-layer="Conversation" style={{ padding: "20px 22px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 11,
+                    alignItems: "center",
+                    borderBottom: "1px solid var(--row-line)",
+                    paddingBottom: 13,
+                    marginBottom: 16,
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-semibold text-white">
-                      {n.href ? (
-                        <Link href={n.href} onClick={() => open(n)} className="hover:text-[#A855F7]">
-                          {n.title}
-                        </Link>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => open(n)}
-                          className="text-left hover:text-[#A855F7]"
-                        >
-                          {n.title}
-                        </button>
-                      )}
-                    </p>
-                    <span className="shrink-0 rounded-md bg-[#9333EA]/25 px-2 py-0.5 text-[10px] font-bold text-[#E9D5FF]">
-                      {n.meta?.adminOnly ? "Admin Alert" : TYPE_LABEL[n.type] ?? n.type}
+                  <span
+                    className="mt-av"
+                    style={{ width: 42, height: 42, borderRadius: "50%" }}
+                  >
+                    {currentThread.name === "ComicVerse Team" ? <ComicVerseMark className="cv-mark-svg" /> : currentThread.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div>
+                    <b className="msg-conv-name" style={{ fontSize: 14.5, color: "#fff" }}>
+                      {currentThread.name}
+                    </b>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 11.5,
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {currentThread.sub}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-[#A8A1B5]">
-                    {n.body} · {timeAgo(n.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {more && (
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                className="cv-btn"
-                disabled={loadingMore}
-                onClick={async () => {
-                  setLoadingMore(true);
-                  await load(page + 1, false);
-                  setLoadingMore(false);
-                }}
-              >
-                {loadingMore ? "Loading…" : "Load more"}
-              </button>
+                </div>
+
+                <div className="msg-conv-body">
+                  {currentThread.bubbles.map((b, idx) => (
+                    <div key={idx} className={`bubble ${b.side}`}>
+                      {b.href ? (
+                        <Link href={b.href} className="hover:underline">
+                          {b.text}
+                        </Link>
+                      ) : (
+                        b.text
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <form
+                  onSubmit={sendMessageToAdmin}
+                  className="msg-send"
+                  style={{ display: "flex", gap: 9, marginTop: 10 }}
+                >
+                  <input
+                    className="set-input"
+                    type="text"
+                    value={quickMsg}
+                    onChange={(e) => setQuickMsg(e.target.value)}
+                    placeholder="Write a message to ComicVerse Admin…"
+                    aria-label="Write a message"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    className="pillbtn"
+                    type="submit"
+                    style={{ justifyContent: "center", minHeight: 42, marginLeft: 0 }}
+                  >
+                    Send
+                  </button>
+                </form>
+              </section>
             </div>
           )}
 
-          {/* PART 8: Separate Admin Notification Experience (Authorized ADMIN users only) */}
+          <section className="panel">
+            <label className="mb-3 flex items-center gap-2 text-sm text-white">
+              <input
+                type="checkbox"
+                checked={meta.newChapter}
+                onChange={async (e) => {
+                  const v = e.target.checked;
+                  setMeta({ ...meta, newChapter: v });
+                  try {
+                    await act("/user/notification-settings", "PUT", { newChapter: v });
+                    setMsg("Saved.");
+                  } catch {
+                    setMeta({ ...meta, newChapter: !v });
+                    setMsg("Couldn't save that setting.");
+                  }
+                }}
+              />
+              Notify me when a bookmarked comic gets a new chapter
+            </label>
+            {msg && (
+              <p role="status" className="mb-2 text-sm text-success">
+                {msg}
+              </p>
+            )}
+
+            {items.length === 0 ? (
+              <div className="empty-note">{empty}</div>
+            ) : (
+              <div className="space-y-1.5">
+                {items.map((n) => {
+                  const isUnread = !n.readAt;
+                  const info = parseNotifDisplay(n, comicLookup);
+                  const rowInner = (
+                    <div className={`np-item${isUnread ? " unread" : ""}`} style={{ padding: "11px 13px" }}>
+                      <Cover
+                        hue={hueOf(info.hueKey)}
+                        title={info.comicTitle}
+                        src={info.coverUrl}
+                        className="np-thumb border-0 !p-0.5"
+                      />
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        {info.isChapter ? (
+                          <>
+                            <span className="nt">{info.comicTitle}</span>
+                            <span className="ns">
+                              <b>New:</b> {info.chapterText}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="nt">
+                              {n.title}{" "}
+                              <span className="tag purple" style={{ marginLeft: 6, fontSize: 10, padding: "1px 7px" }}>
+                                {n.meta?.adminOnly ? "Admin Alert" : TYPE_LABEL[n.type] ?? n.type}
+                              </span>
+                            </span>
+                            <span className="ns">{n.body}</span>
+                          </>
+                        )}
+                      </span>
+                      <span suppressHydrationWarning className="nw">
+                        {shortTimeAgo(n.createdAt)}
+                      </span>
+                    </div>
+                  );
+
+                  return n.href ? (
+                    <Link
+                      key={n.id}
+                      href={n.href}
+                      onClick={() => open(n)}
+                      className="block"
+                    >
+                      {rowInner}
+                    </Link>
+                  ) : (
+                    <div key={n.id} onClick={() => open(n)}>
+                      {rowInner}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {more && (
+              <div className="pager">
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={async () => {
+                    setLoadingMore(true);
+                    await load(page + 1, false);
+                    setLoadingMore(false);
+                  }}
+                >
+                  {loadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Admin Chapter Synchronization & Operational Alerts */}
           {isAdmin && (
-            <section className="space-y-4 rounded-2xl border border-[#322A42] bg-[#211B2D] p-5">
+            <section className="panel space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="flex items-center gap-2 text-lg font-bold text-white">
-                    <ShieldAlert size={19} className="text-[#A855F7]" aria-hidden />
+                  <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "#fff" }}>
                     Admin Chapter Synchronization &amp; Operational Alerts
                   </h2>
-                  <p className="text-xs text-[#A8A1B5]">
+                  <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0" }}>
                     Private to administrators: view automatically published chapters, sync failures, and provider alerts.
                   </p>
                 </div>
@@ -360,38 +568,31 @@ export default function NotificationsView(props?: {
                     type="button"
                     disabled={syncBusy}
                     onClick={() => void runSyncNow()}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#9333EA] px-3.5 py-2 text-xs font-bold text-white transition hover:bg-[#A855F7] disabled:opacity-50"
+                    className="pillbtn"
+                    style={{ marginLeft: 0 }}
                   >
                     <RefreshCw size={13} className={syncBusy ? "animate-spin" : ""} aria-hidden />
                     {syncBusy ? "Synchronizing…" : "Sync & Repair Comics Now"}
                   </button>
-                  <Link
-                    href="/admin/sources"
-                    className="rounded-xl border border-[#322A42] bg-[#100E16] px-3 py-2 text-xs font-semibold text-[#A8A1B5] hover:border-[#A855F7] hover:text-white"
-                  >
+                  <Link href="/admin/sources" className="rowbtn">
                     Manage Sources →
                   </Link>
                 </div>
               </div>
 
               {syncNotice && (
-                <div role="status" className="rounded-xl border border-[#A855F7]/40 bg-[#100E16] px-4 py-2.5 text-xs text-white">
+                <div role="status" className="svc-alert" style={{ borderColor: "var(--purple-2)" }}>
                   {syncNotice}
                 </div>
               )}
 
-              {/* Filters: All | Published | Failed | WeebCentral | AsuraScans */}
               <div className="flex flex-wrap gap-1.5" role="group" aria-label="Admin alert filters">
                 {ADMIN_FILTERS.map((f) => (
                   <button
                     key={f.key}
                     type="button"
                     onClick={() => setAdminFilter(f.key)}
-                    className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-                      adminFilter === f.key
-                        ? "bg-[#9333EA] text-white"
-                        : "bg-[#100E16] text-[#A8A1B5] hover:text-white"
-                    }`}
+                    className={`chip${adminFilter === f.key ? " on" : ""}`}
                   >
                     {f.label}
                   </button>
@@ -399,50 +600,37 @@ export default function NotificationsView(props?: {
               </div>
 
               {adminAlerts.length === 0 ? (
-                <p className="rounded-xl border border-[#322A42] bg-[#100E16] p-4 text-xs text-[#A8A1B5]">
+                <p style={{ fontSize: 12.5, color: "var(--muted)", margin: 0 }}>
                   No administrator synchronization notifications match the &ldquo;{adminFilter}&rdquo; filter yet.
                 </p>
               ) : (
-                <ul className="space-y-2.5">
+                <div className="space-y-2">
                   {adminAlerts.map((alert) => {
                     const m = alert.meta ?? {};
                     const isFailed = m.status === "FAILED" || alert.title.includes("failed");
                     return (
-                      <li
-                        key={alert.id}
-                        className="rounded-xl border border-[#322A42] bg-[#100E16] p-4 text-xs space-y-2"
-                      >
+                      <div key={alert.id} className="svc-alert space-y-1.5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
-                                isFailed
-                                  ? "bg-rose-500/20 text-rose-300"
-                                  : "bg-emerald-500/20 text-emerald-300"
-                              }`}
-                            >
+                            <span className={`tag ${isFailed ? "red" : "green"}`}>
                               {isFailed ? "Failed" : "Successfully Published"}
                             </span>
-                            {m.providerName && (
-                              <span className="rounded-md bg-[#211B2D] px-2 py-0.5 font-semibold text-[#A855F7]">
-                                {m.providerName}
-                              </span>
-                            )}
-                            <span className="font-bold text-white">{alert.title}</span>
+                            {m.providerName && <span className="tag purple">{m.providerName}</span>}
+                            <strong className="text-white">{alert.title}</strong>
                           </div>
-                          <span className="text-[#A8A1B5]">{timeAgo(alert.createdAt)}</span>
+                          <span style={{ color: "var(--muted)" }}>{timeAgo(alert.createdAt)}</span>
                         </div>
-                        <p className="text-[#A8A1B5] leading-relaxed">{alert.body}</p>
+                        <p style={{ color: "var(--muted)", margin: 0 }}>{alert.body}</p>
                         <div className="flex flex-wrap items-center gap-4 pt-1 font-semibold">
                           {alert.href && (
-                            <Link href={alert.href} className="text-[#A855F7] hover:underline">
+                            <Link href={alert.href} style={{ color: "var(--purple-2)" }}>
                               Open ComicVerse Chapter →
                             </Link>
                           )}
                           {m.comicId && (
                             <Link
                               href={`/admin/chapters?comicId=${encodeURIComponent(m.comicId)}`}
-                              className="text-white hover:text-[#A855F7] hover:underline"
+                              className="text-white hover:underline"
                             >
                               Manage Comic Chapters
                             </Link>
@@ -452,81 +640,88 @@ export default function NotificationsView(props?: {
                               href={m.sourceUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[#A8A1B5] hover:text-white"
+                              style={{ color: "var(--muted)" }}
                             >
-                              Source Comic <ExternalLink size={12} aria-hidden />
+                              Source Comic ↗
                             </a>
                           )}
                         </div>
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </section>
           )}
 
-          {/* User's Submitted Issue Reports & Admin Responses */}
-          <div className="space-y-3 pt-4 border-t border-line">
+          {/* User's Submitted Issue Reports */}
+          <section className="panel space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-white">My Submitted Issue Reports</h2>
-                <p className="text-xs text-[#A8A1B5]">
+                <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0, color: "#fff" }}>
+                  My Submitted Issue Reports
+                </h2>
+                <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0" }}>
                   Track issues you reported to the ComicVerse Admin team and view their responses.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void load(1, true)}
-                className="text-xs text-[#A855F7] hover:underline"
-              >
+              <button type="button" onClick={() => void load(1, true)} className="rowbtn">
                 Refresh
               </button>
             </div>
 
             {myReports.length === 0 ? (
-              <p className="rounded-lg border border-line bg-[#211B2D]/40 p-4 text-xs text-[#A8A1B5]">
+              <p style={{ fontSize: 12.5, color: "var(--muted)", margin: 0 }}>
                 You haven&apos;t submitted any issue reports yet.
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {myReports.map((r) => (
-                  <div key={r.id} className="rounded-xl border border-line bg-[#211B2D] p-4 space-y-2 text-sm">
+                  <div key={r.id} className="svc-alert space-y-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="rounded bg-[#100E16] px-2 py-0.5 text-xs font-semibold text-[#A855F7]">
-                          {r.category}
-                        </span>
-                        <span className="font-semibold text-white">{r.subject}</span>
+                        <span className="tag purple">{r.category}</span>
+                        <strong className="text-white">{r.subject}</strong>
                       </div>
                       <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        className={`tag ${
                           r.status === "RESOLVED"
-                            ? "bg-emerald-500/15 text-emerald-400"
+                            ? "green"
                             : r.status === "DISMISSED"
-                            ? "bg-zinc-500/15 text-[#A8A1B5]"
-                            : "bg-amber-500/15 text-amber-400"
+                            ? "grey"
+                            : "amber"
                         }`}
                       >
                         {r.status}
                       </span>
                     </div>
-                    <p className="text-xs text-[#A8A1B5]">{r.description}</p>
+                    <p style={{ color: "var(--muted)", margin: 0 }}>{r.description}</p>
                     {r.adminResponse && (
-                      <div className="rounded-md border border-[#9333EA]/40 bg-[#100E16] p-3 text-xs">
-                        <p className="font-semibold text-[#A855F7]">Admin Response:</p>
-                        <p className="mt-1 text-white">{r.adminResponse}</p>
+                      <div
+                        style={{
+                          background: "rgba(147,51,234,.14)",
+                          border: "1px solid rgba(168,85,247,.35)",
+                          borderRadius: 7,
+                          padding: "8px 11px",
+                        }}
+                      >
+                        <strong style={{ color: "var(--purple-2)", display: "block" }}>
+                          Admin Response:
+                        </strong>
+                        <span className="text-white">{r.adminResponse}</span>
                       </div>
                     )}
-                    <p className="text-[11px] text-[#A8A1B5]">
+                    <span style={{ fontSize: 11, color: "var(--muted-2)", display: "block" }}>
                       Submitted {new Date(r.createdAt).toLocaleString()}
-                      {r.respondedAt ? ` · Responded ${new Date(r.respondedAt).toLocaleString()}` : ""}
-                    </p>
+                      {r.respondedAt
+                        ? ` · Responded ${new Date(r.respondedAt).toLocaleString()}`
+                        : ""}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </>
       )}
     </div>

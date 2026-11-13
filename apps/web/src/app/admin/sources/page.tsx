@@ -10,13 +10,24 @@ interface AdminSource {
   defaultName: string;
   enabled: boolean;
   officialUrl: string;
-  capabilities: { search: boolean; details: boolean; chapters: boolean; pages: boolean; types: string[] };
+  capabilities: {
+    search: boolean;
+    details: boolean;
+    chapters: boolean;
+    pages: boolean;
+    types: string[];
+  };
   notes: string[];
   recentErrors: { at: string; code: string; message: string }[];
 }
 
 type AlertFilter = "all" | "published" | "failed" | "weebcentral" | "asurascans";
 
+/**
+ * Asura Admin Sources Page (#frame-admin-sources):
+ * .a-top header, 3-card .stat-grid, Automatic Chapter Synchronization & Admin Alerts panel,
+ * and source cards (.a-panel).
+ */
 export default function AdminSources() {
   const { data, error, loading, reload } = useLoad<{
     enabled: boolean;
@@ -56,15 +67,17 @@ export default function AdminSources() {
   };
 
   const syncStatus = adminNotifs.data?.syncStatus;
+  const activeCount = (data?.sources ?? []).filter((s) => s.enabled).length;
+  const totalErrors = (data?.sources ?? []).reduce((acc, s) => acc + s.recentErrors.length, 0);
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <div className="a-top" data-layer="Admin Topbar">
         <div>
-          <h1 className="text-2xl font-bold text-white">External Sources &amp; Automatic Synchronization</h1>
-          <p className="mt-1 max-w-2xl text-sm text-[#A8A1B5]">
-            Manage WeebCentral and AsuraScans integrations, monitor automatic background chapter detection, repair existing published comics, and inspect admin publication alerts.
-          </p>
+          <h1>Sources</h1>
+          <div className="sub">
+            Where chapters come from — sync status for WeebCentral, AsuraScans &amp; ComicK.
+          </div>
         </div>
         <button
           type="button"
@@ -84,37 +97,68 @@ export default function AdminSources() {
             })
           }
           className={btn}
+          style={{ marginLeft: "auto" }}
         >
-          {busy === "sync-all" ? "Synchronizing All Comics…" : "Sync & Repair All Published Comics Now"}
+          {busy === "sync-all"
+            ? "Synchronizing All Comics…"
+            : "Sync & Repair All Published Comics Now"}
         </button>
       </div>
 
+      <div
+        className="stat-grid"
+        data-layer="Stat Cards"
+        style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+      >
+        <div className="stat">
+          <div className="k">Active Sources</div>
+          <div className="v">{activeCount}</div>
+          <div className="d up">All feeds reporting</div>
+        </div>
+        <div className="stat">
+          <div className="k">Sync Alerts</div>
+          <div className="v">{adminNotifs.data?.total ?? 0}</div>
+          <div className="d up">Auto-sync &amp; publish log</div>
+        </div>
+        <div className="stat">
+          <div className="k">Recent Errors</div>
+          <div className="v">{totalErrors}</div>
+          <div className={`d ${totalErrors > 0 ? "down" : "up"}`}>
+            {totalErrors > 0 ? "Inspect provider logs" : "0 upstream timeouts"}
+          </div>
+        </div>
+      </div>
+
       {syncMsg && (
-        <div role="status" className="rounded-xl border border-[#A855F7]/50 bg-[#211B2D] p-4 text-sm text-white">
+        <div role="status" className="svc-alert mb-4" style={{ borderColor: "var(--purple-2)" }}>
           {syncMsg}
         </div>
       )}
       {err && (
-        <p role="alert" className="text-danger">
+        <p role="alert" className="mb-3 text-danger">
           {err}
         </p>
       )}
       <State loading={loading} error={error} />
 
       {/* Automatic Background Synchronization Status & Filters */}
-      <section className="rounded-xl border border-line bg-[#211B2D] p-5 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="a-panel" data-layer="Automatic Synchronization">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
-            <h2 className="text-lg font-bold text-white">Automatic Chapter Synchronization &amp; Admin Alerts</h2>
+            <h3>Automatic Chapter Synchronization &amp; Admin Alerts</h3>
             {syncStatus?.config && (
-              <p className="text-xs text-[#A8A1B5]">
+              <div className="psub" style={{ marginBottom: 0 }}>
                 Auto-Sync: <strong>{syncStatus.config.enabled ? "Enabled" : "Disabled"}</strong> · Polling every{" "}
                 <strong>{syncStatus.config.intervalMinutes} min</strong> · Batch size:{" "}
                 <strong>{syncStatus.config.batchSize} comics</strong>
-              </p>
+              </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter synchronization alerts">
+          <div
+            className="flex flex-wrap gap-1.5"
+            role="group"
+            aria-label="Filter synchronization alerts"
+          >
             {(
               [
                 ["all", "All"],
@@ -128,11 +172,8 @@ export default function AdminSources() {
                 key={k}
                 type="button"
                 onClick={() => setAlertFilter(k)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                  alertFilter === k
-                    ? "bg-[#9333EA] text-white"
-                    : "bg-[#100E16] text-[#A8A1B5] hover:text-white"
-                }`}
+                className={`chip${alertFilter === k ? " on" : ""}`}
+                style={{ padding: "4px 11px", fontSize: 11.5 }}
               >
                 {label}
               </button>
@@ -141,7 +182,7 @@ export default function AdminSources() {
         </div>
 
         {(adminNotifs.data?.items ?? []).length === 0 ? (
-          <p className="rounded-lg border border-line bg-[#100E16] p-4 text-xs text-[#A8A1B5]">
+          <p className="text-xs text-muted m-0">
             No synchronization alerts recorded for filter &ldquo;{alertFilter}&rdquo;.
           </p>
         ) : (
@@ -152,29 +193,21 @@ export default function AdminSources() {
               return (
                 <div
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-[#100E16] p-3 text-xs"
+                  className="svc-alert flex flex-wrap items-center justify-between gap-3"
                 >
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
-                          isFailed ? "bg-rose-500/20 text-rose-300" : "bg-emerald-500/20 text-emerald-300"
-                        }`}
-                      >
+                      <span className={`tag ${isFailed ? "red" : "green"}`}>
                         {isFailed ? "Failed" : "Published"}
                       </span>
-                      {m.providerName && (
-                        <span className="rounded bg-[#211B2D] px-2 py-0.5 font-semibold text-[#A855F7]">
-                          {m.providerName}
-                        </span>
-                      )}
-                      <span className="font-bold text-white">{item.title}</span>
+                      {m.providerName && <span className="tag purple">{m.providerName}</span>}
+                      <strong className="text-white">{item.title}</strong>
                     </div>
-                    <p className="text-[#A8A1B5]">{item.body}</p>
+                    <p style={{ color: "var(--muted)", margin: 0 }}>{item.body}</p>
                   </div>
                   <div className="flex items-center gap-3 font-semibold">
                     {item.href && (
-                      <Link href={item.href} className="text-[#A855F7] hover:underline">
+                      <Link href={item.href} className="rowbtn">
                         Open Chapter →
                       </Link>
                     )}
@@ -183,7 +216,7 @@ export default function AdminSources() {
                         href={m.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[#A8A1B5] hover:text-white"
+                        className="rowbtn"
                       >
                         Source ↗
                       </a>
@@ -195,21 +228,21 @@ export default function AdminSources() {
           </div>
         )}
 
-        {/* Conflicts & Failed Chapter Imports */}
         {(syncStatus?.conflicts?.length ?? 0) > 0 && (
-          <div className="space-y-2 pt-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">
+          <div className="space-y-2 pt-3">
+            <div className="svc-sub" style={{ color: "var(--amber)" }}>
               Chapter Number Conflicts Requiring Admin Review ({syncStatus!.conflicts.length})
-            </h3>
+            </div>
             {syncStatus!.conflicts.map((c: any, idx: number) => (
-              <div key={idx} className="rounded-lg border border-amber-500/30 bg-[#100E16] p-3 text-xs">
-                <p className="font-semibold text-white">
-                  {c.comicTitle} ({c.sourceId}) — Current Ch. {c.currentNumber} → Target Ch. {c.targetNumber}
+              <div key={idx} className="svc-alert">
+                <p className="font-semibold text-white m-0">
+                  {c.comicTitle} ({c.sourceId}) — Current Ch. {c.currentNumber} → Target Ch.{" "}
+                  {c.targetNumber}
                 </p>
-                <p className="text-[#A8A1B5]">{c.reason}</p>
+                <p style={{ color: "var(--muted)", margin: "2px 0 6px" }}>{c.reason}</p>
                 <Link
                   href={`/admin/chapters?comicId=${encodeURIComponent(c.comicId)}`}
-                  className="mt-1 inline-block font-semibold text-[#A855F7] hover:underline"
+                  className="rowbtn"
                 >
                   Resolve in Chapter Manager →
                 </Link>
@@ -220,24 +253,22 @@ export default function AdminSources() {
       </section>
 
       {data && !data.enabled && (
-        <p role="status" className="mb-4 rounded-lg border border-line bg-card p-4">
-          External sources are turned off on the server (<code>SOURCES_ENABLED</code> is not <code>true</code>), so nothing is listed.
-        </p>
+        <div role="status" className="a-panel">
+          External sources are turned off on the server (<code>SOURCES_ENABLED</code> is not{" "}
+          <code>true</code>), so nothing is listed.
+        </div>
       )}
-      {data && data.enabled && (
-        <p className="text-sm text-[#A8A1B5]">
-          Source hosts: {data.config.hosts.join(", ")} · timeout {data.config.timeoutMs / 1000}s
-        </p>
-      )}
+
       {data?.sources.map((s) => (
-        <section key={s.id} className="rounded-xl border border-line bg-[#211B2D] p-5">
+        <section key={s.id} className="a-panel">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-semibold text-white">{s.displayName}</h2>
+            <h3>{s.displayName}</h3>
             <Badge v={s.enabled ? "ACTIVE" : "SUSPENDED"} />
-            <span className="text-xs text-[#A8A1B5]">id: {s.id}</span>
+            <span className="text-xs text-muted">id: {s.id}</span>
           </div>
-          <p className="mt-1 text-sm text-[#A8A1B5]">
-            Supports: {[
+          <p className="psub" style={{ marginTop: 4, marginBottom: 8 }}>
+            Supports:{" "}
+            {[
               s.capabilities.search && "search",
               s.capabilities.details && "details",
               s.capabilities.chapters && "chapter lists",
@@ -247,13 +278,14 @@ export default function AdminSources() {
               .join(", ")}{" "}
             · types: {s.capabilities.types.join(", ")}
           </p>
-          <ul className="mt-1 list-disc pl-5 text-xs text-[#A8A1B5]">
+          <ul className="mb-3 list-disc pl-5 text-xs text-muted">
             {s.notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
           </ul>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               disabled={busy === s.id + "t"}
               className={btn}
               onClick={() =>
@@ -264,7 +296,9 @@ export default function AdminSources() {
                   );
                   setResult((x) => ({
                     ...x,
-                    [s.id]: r.ok ? `Reachable (${r.latencyMs} ms)` : `Not reachable: ${r.message ?? "unknown problem"}`,
+                    [s.id]: r.ok
+                      ? `Reachable (${r.latencyMs} ms)`
+                      : `Not reachable: ${r.message ?? "unknown problem"}`,
                   }));
                 })
               }
@@ -272,29 +306,44 @@ export default function AdminSources() {
               Test connectivity
             </button>
             <button
+              type="button"
               className={btnGhost}
-              onClick={() => run(s.id + "e", () => act(`/admin/sources/${s.id}`, "PUT", { enabled: !s.enabled }))}
+              onClick={() =>
+                run(s.id + "e", () => act(`/admin/sources/${s.id}`, "PUT", { enabled: !s.enabled }))
+              }
             >
               {s.enabled ? "Disable" : "Enable"}
             </button>
             <button
+              type="button"
               className={btnGhost}
               onClick={() => {
                 const n = prompt("Display name", s.displayName)?.trim();
                 if (n && n !== s.displayName)
-                  run(s.id + "n", () => act(`/admin/sources/${s.id}`, "PUT", { displayName: n }));
+                  run(s.id + "n", () =>
+                    act(`/admin/sources/${s.id}`, "PUT", { displayName: n }),
+                  );
               }}
             >
               Rename
             </button>
-            <a className={btnGhost} href={s.officialUrl} target="_blank" rel="noopener noreferrer">
-              Open site
+            <a
+              className={btnGhost}
+              href={s.officialUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open site ↗
             </a>
           </div>
-          {result[s.id] && <p role="status" className="mt-2 text-sm text-white">{result[s.id]}</p>}
-          <h3 className="mb-1 mt-4 text-sm font-semibold text-white">Recent errors</h3>
+          {result[s.id] && (
+            <p role="status" className="mt-2 text-sm text-white">
+              {result[s.id]}
+            </p>
+          )}
+          <div className="svc-sub">Recent errors</div>
           {s.recentErrors.length === 0 ? (
-            <p className="text-sm text-[#A8A1B5]">None since the API last started.</p>
+            <p className="text-xs text-muted m-0">None since the API last started.</p>
           ) : (
             <table className={table}>
               <thead>
@@ -307,7 +356,9 @@ export default function AdminSources() {
               <tbody>
                 {s.recentErrors.map((e, i) => (
                   <tr key={i}>
-                    <td className="whitespace-nowrap">{new Date(e.at).toLocaleString("en-IN")}</td>
+                    <td className="whitespace-nowrap">
+                      {new Date(e.at).toLocaleString("en-IN")}
+                    </td>
                     <td>{e.code}</td>
                     <td>{e.message}</td>
                   </tr>
