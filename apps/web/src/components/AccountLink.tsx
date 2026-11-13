@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Bell, LogOut, PenLine, ShieldCheck, UserRound } from "lucide-react";
+import { Bell, LogOut, PenLine, UserRound } from "lucide-react";
 
 type User = {
   username: string;
@@ -83,16 +83,8 @@ export default function AccountLink() {
 
   return (
     <div className="hidden items-center gap-2 md:flex">
-      {/* Admin Panel (admins) or Creator portal (everyone else) */}
-      {user.role === "ADMIN" ? (
-        <Link
-          href="/admin"
-          className="group inline-flex items-center gap-2 rounded-xl border border-purple-500/20 bg-purple-500/10 px-3.5 py-2 text-sm font-semibold text-purple-600 transition-all duration-200 hover:border-purple-500/40 hover:bg-purple-500/20 dark:text-purple-400"
-        >
-          <ShieldCheck size={17} />
-          <span>Admin Panel</span>
-        </Link>
-      ) : (
+      {/* Creator portal (everyone except admins; admins reach the panel via the profile popup) */}
+      {user.role !== "ADMIN" && (
         <Link href="/creator/dashboard" className={pill}>
           <PenLine size={16} />
           <span>Creator</span>

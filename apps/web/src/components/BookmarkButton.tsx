@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Bookmark } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 
-export default function BookmarkButton({ comicId }: { comicId: string }) {
+export default function BookmarkButton({ comicId, className = "", fill = false }: { comicId: string; className?: string; fill?: boolean }) {
   const router = useRouter();
   const [state, setState] = useState<"loading" | "anon" | "on" | "off">("loading");
   const [err, setErr] = useState("");
@@ -24,8 +24,8 @@ export default function BookmarkButton({ comicId }: { comicId: string }) {
     } catch (e) { setState(prev); setErr(e instanceof ApiError ? e.message : "Couldn't update bookmark."); }
   }
   return (
-    <span>
-      <button onClick={toggle} aria-pressed={state === "on"} className="flex items-center gap-2 rounded-md border border-line px-4 py-2.5 font-semibold hover:bg-card">
+    <span className={fill ? "block w-full" : undefined}>
+      <button onClick={toggle} aria-pressed={state === "on"} className={`flex items-center gap-2 rounded-md border border-line px-4 py-2.5 font-semibold hover:bg-card ${fill ? "w-full justify-center" : ""} ${className}`}>
         <Bookmark size={18} className={state === "on" ? "fill-primary text-primary" : ""} aria-hidden />
         {state === "on" ? "Bookmarked" : state === "anon" ? "Log in to bookmark" : "Bookmark"}
       </button>

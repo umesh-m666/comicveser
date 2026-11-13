@@ -1,55 +1,171 @@
+"use client";
+
 import Link from "next/link";
-import AccountLink from "./AccountLink";
-import { BookOpen, Bookmark, Compass, Home, Search, User } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, BookOpen, Bookmark, Compass, Home, Search, UserRound } from "lucide-react";
+import { api } from "@/lib/api";
+import SearchPanel from "./SearchPanel";
+import NotificationsDropdown from "./NotificationsDropdown";
+import ProfilePopup, { PopupUser } from "./ProfilePopup";
 
 const links = [
   { href: "/", label: "Home", Icon: Home },
-  { href: "/browse", label: "Discover", Icon: Compass },
   { href: "/manga", label: "Manga", Icon: BookOpen },
-  { href: "/profile/bookmarks", label: "My Library", Icon: Bookmark },
+  { href: "/browse", label: "Browse", Icon: Compass },
+  { href: "/profile/bookmarks", label: "Bookmarks", Icon: Bookmark },
 ];
 
+type Panel = "search" | "notif" | "profile" | null;
+
 export function Header() {
+  const path = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<PopupUser | null | undefined>(undefined);
+  const [unread, setUnread] = useState(0);
+  const [panel, setPanel] = useState<Panel>(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  const refreshUser = useCallback(() => {
+    let active = true;
+    api<PopupUser>("/auth/me", { credentials: "include" })
+      .then((data) => {
+        if (!active) return;
+        setUser(data);
+        api<{ unread: number }>("/user/notifications", { credentials: "include" })
+          .then((n) => active && setUnread(n.unread))
+          .catch(() => {});
+      })
+      .catch(() => { if (active) setUser(null); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => refreshUser(), [path, refreshUser]);
+
+  useEffect(() => {
+    const onChange = () => refreshUser();
+    window.addEventListener("cv:notifications", onChange);
+    return () => window.removeEventListener("cv:notifications", onChange);
+  }, [refreshUser]);
+
+  // Ctrl/Cmd+K opens search, Esc closes any open panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPanel((p) => (p === "search" ? null : "search")); }
+      if (e.key === "Escape") setPanel(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Close panels on outside click.
+  useEffect(() => {
+    if (!panel) return;
+    const onDown = (e: MouseEvent) => {
+      if (headerRef.current && !headerRef.current.contains(e.target as Node)) setPanel(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [panel]);
+
+  const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
+  const isActive = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+
   return (
-    <header className="cv-header sticky top-0 z-30">
-      <div className="mx-auto flex min-h-[4.5rem] max-w-7xl items-center gap-3 px-4 md:gap-6">
+    <header ref={headerRef} className="cv-header sticky top-0 z-40">
+      <div className="relative mx-auto flex min-h-[4.5rem] max-w-7xl items-center gap-2 px-4 md:gap-4">
         <Link href="/" className="flex shrink-0 items-center text-lg font-black tracking-tight text-fg">
           <span className="cv-logo-mark">C</span>
           Comic<span className="text-primary">Verse</span>
         </Link>
         <nav aria-label="Main" className="hidden items-center gap-1 text-sm text-muted md:flex">
-          {links.map((l) => <Link key={l.href} href={l.href} className="cv-nav-link">{l.label}</Link>)}
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} aria-current={isActive(l.href) ? "page" : undefined} className="cv-nav-link">{l.label}</Link>
+          ))}
         </nav>
-        <form action="/browse" role="search" className="ml-auto flex min-w-0 items-center">
-          <label htmlFor="hq" className="sr-only">Search comics</label>
+
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2">
+          <button
+            type="button"
+            onClick={() => toggle("search")}
+            aria-label="Search comics (Ctrl K)"
+            aria-expanded={panel === "search"}
+            className="rounded-full border border-line bg-card/70 p-2.5 text-fg hover:border-primary hover:text-white"
+          >
+            <Search size={18} />
+          </button>
+          <Link href="/profile/bookmarks" aria-label="Bookmarks" className="hidden rounded-full border border-line bg-card/70 p-2.5 text-fg hover:border-primary hover:text-white sm:block">
+            <Bookmark size={18} />
+          </Link>
           <div className="relative">
-            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input id="hq" name="q" placeholder="Search stories..." className="cv-search w-32 py-2 pl-9 pr-3 text-sm placeholder:text-muted sm:w-56" />
+            <button
+              type="button"
+              onClick={() => toggle("notif")}
+              aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+              aria-expanded={panel === "notif"}
+              className="relative rounded-full border border-line bg-card/70 p-2.5 text-fg hover:border-primary hover:text-white"
+            >
+              <Bell size={18} />
+              {unread > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-black text-white ring-2 ring-[#2a1650]">{unread > 99 ? "99+" : unread}</span>
+              )}
+            </button>
+            <NotificationsDropdown open={panel === "notif"} onClose={() => setPanel(null)} onUnreadChange={setUnread} />
           </div>
-        </form>
-        <div className="shrink-0"><AccountLink /></div>
+          <div className="relative">
+            {user === undefined ? (
+              <span className="block h-10 w-10 animate-pulse rounded-full bg-card" aria-hidden />
+            ) : user ? (
+              <button
+                type="button"
+                onClick={() => toggle("profile")}
+                aria-label="Profile menu"
+                aria-expanded={panel === "profile"}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-base font-black text-white ring-2 ring-white/20 hover:ring-white/50"
+              >
+                {user.username.slice(0, 1).toUpperCase()}
+              </button>
+            ) : (
+              <Link href="/login" className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:-translate-y-0.5">
+                <UserRound size={16} /> Log in
+              </Link>
+            )}
+            <ProfilePopup
+              open={panel === "profile" && !!user}
+              onClose={() => setPanel(null)}
+              user={user ?? null}
+              onLoggedOut={() => { setUser(null); setUnread(0); router.refresh(); }}
+            />
+          </div>
+        </div>
+
+        <SearchPanel open={panel === "search"} onClose={() => setPanel(null)} />
       </div>
     </header>
   );
 }
 
 export function BottomNav() {
-  const items = [...links.slice(0, 3), { href: "/login", label: "Account", Icon: User }];
+  const path = usePathname();
+  const isActive = (href: string) => href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
   return (
-    <nav aria-label="Mobile" className="cv-mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t md:hidden">
-      {items.map(({ href, label, Icon }) => (
-        <Link key={href} href={href} className="flex flex-col items-center gap-1 py-2.5 text-[11px] text-muted hover:text-fg">
-          <Icon size={19} aria-hidden />{label}
-        </Link>
-      ))}
+    <nav aria-label="Mobile" className="cv-mobile-nav fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 gap-1 p-1.5 md:hidden">
+      {links.map(({ href, label, Icon }) => {
+        const active = isActive(href);
+        return (
+          <Link key={href} href={href} aria-current={active ? "page" : undefined} className={`flex flex-col items-center gap-0.5 rounded-full px-4 py-2 text-[11px] font-bold transition ${active ? "bg-primary text-white shadow-lg shadow-violet-950/50" : "text-muted hover:text-fg"}`}>
+            <Icon size={19} aria-hidden />{label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
 
 export function Footer() {
-  const f = [["About","/about"],["Contact","/contact"],["Privacy","/privacy"],["Terms","/terms"],["Copyright","/copyright-policy"]];
+  const f = [["About", "/about"], ["Contact", "/contact"], ["Privacy", "/privacy"], ["Terms", "/terms"], ["Copyright", "/copyright-policy"]];
   return (
-    <footer className="mt-20 border-t border-line pb-24 md:pb-8">
+    <footer className="mt-20 border-t border-line pb-28 md:pb-8">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-9 text-sm text-muted">
         <div><p className="font-bold text-fg">Comic<span className="text-primary">Verse</span></p><p className="mt-1 text-xs">Stories worth staying up for.</p></div>
         <nav aria-label="Footer" className="flex flex-wrap gap-4">
