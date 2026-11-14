@@ -37,7 +37,7 @@ export default function AdminGenres() {
       <div
         className="stat-grid"
         data-layer="Stat Cards"
-        style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+        
       >
         <div className="stat">
           <div className="k">Total Genres</div>

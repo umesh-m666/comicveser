@@ -114,9 +114,11 @@ export default function AccountDashboard() {
             </h1>
             <span style={{ fontSize: 12, color: "var(--muted)", display: "block" }}>
               {user.email} · {joinedText} ·{" "}
-              <span className="pm-badge" style={{ margin: "0 0 0 4px" }}>
-                {roleLabel}
-              </span>
+              {roleLabel === "ADMIN" ? (
+                <span className="pm-badge" style={{ margin: "0 0 0 4px" }}>★ {roleLabel}</span>
+              ) : (
+                <span className="pm-badge user-badge" style={{ margin: "0 0 0 4px" }}>{roleLabel}</span>
+              )}
             </span>
             {profile.data?.bio && (
               <p style={{ margin: "6px 0 0", fontSize: 13, color: "#d9d4e2" }}>

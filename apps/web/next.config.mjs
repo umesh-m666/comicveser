@@ -1,3 +1,17 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Automatically remove any leftover App Router icon files in src/app/ that conflict with public/ icons
+try {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const appDir = path.join(__dirname, "src", "app");
+  for (const f of ["favicon.ico", "icon.svg", "icon.png", "apple-icon.png"]) {
+    const p = path.join(appDir, f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+} catch {}
+
 /** @type {import('next').NextConfig} */
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },

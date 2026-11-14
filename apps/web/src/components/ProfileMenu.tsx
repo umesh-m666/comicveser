@@ -83,7 +83,11 @@ export default function ProfileMenu() {
           <div style={{ minWidth: 0 }}>
             <span className="pm-name truncate">{user.username}</span>
             <span className="pm-mail truncate">{user.email}</span>
-            <span className="pm-badge">★ {roleLabel}</span>
+            {roleLabel === "ADMIN" ? (
+              <span className="pm-badge">★ {roleLabel}</span>
+            ) : (
+              <span className="pm-badge user-badge">{roleLabel}</span>
+            )}
           </div>
         </div>
 

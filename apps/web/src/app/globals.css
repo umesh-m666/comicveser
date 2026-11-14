@@ -1011,7 +1011,7 @@ main {
 }
 @media (max-width: 1023px) {
   .home-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .panel {
@@ -1397,12 +1397,12 @@ main {
 /* ---------- LATEST UPDATES (.latest-grid, .upd, .chrow, .read-bar, .pager) ---------- */
 .latest-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px 22px;
 }
 @media (max-width: 767px) {
   .latest-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .upd {
@@ -2140,12 +2140,12 @@ main {
 }
 .bm-continue {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 13px;
 }
 @media (max-width: 1023px) {
   .bm-continue {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .bm-cont-card {
@@ -2756,7 +2756,7 @@ div.admin {
 }
 @media (max-width: 1023px) {
   div.admin {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 .a-side {
@@ -3586,4 +3586,423 @@ div.admin {
 .msg-thread .mt-av {
   background: #2f2250;
   padding: 7px;
+}
+
+/* =====================================================================
+   MOBILE RESPONSIVE OVERRIDES (320px–767px & <=1023px)
+   Fixes header avatar clipping, Announcement Strip X overlap,
+   Home/Trending/Latest Updates horizontal overflow, Continue Reading card overflow,
+   Admin table (.atable) cutoff, and Back-To-Top (.topbtn) / BottomNav overlap.
+   ===================================================================== */
+
+/* 1. Strict containment so no grid/flex child ever expands past viewport */
+.wrap,
+.home-grid,
+.home-grid > *,
+.latest-grid,
+.latest-grid > *,
+.trend-row,
+.trend-row > *,
+.browse-grid,
+.browse-grid > *,
+.bm-continue,
+.bm-continue > *,
+.panel,
+.a-panel,
+.a-main,
+div.admin,
+div.admin > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* 2. Hide desktop-only header Bookmark button on tablet/mobile (BottomNav has Bookmarks) */
+@media (max-width: 1023px) {
+  .s-book {
+    display: none !important;
+  }
+  main {
+    padding-bottom: calc(6.5rem + var(--safe-bottom));
+  }
+  .s-footer {
+    padding-bottom: calc(108px + var(--safe-bottom));
+  }
+  .topbtn {
+    bottom: calc(96px + var(--safe-bottom)) !important;
+    right: 14px !important;
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+    z-index: 34;
+  }
+}
+
+/* 3. Announcement Strip: prevent close X button from overlapping READ button on mobile */
+.s-strip .wrap {
+  justify-content: space-between;
+  gap: 8px;
+}
+.s-strip .wrap > .truncate {
+  flex: 1;
+  min-width: 0;
+}
+.s-strip .x {
+  position: static !important;
+  right: auto !important;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+/* 4. Latest Updates (.upd, .chrow, .read-bar) mobile containment */
+.upd {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.upd .u-main {
+  flex: 1 1 0%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.upd h3 {
+  max-width: 100%;
+}
+.chrow {
+  min-width: 0;
+  max-width: 100%;
+}
+.chrow > span:first-child {
+  flex: 1 1 0%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chrow .when {
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: 6px;
+}
+.read-bar {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 5. Bookmarks Stats (.m-stat) & Continue Reading (.bm-cont-card) mobile fit */
+.m-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 74px;
+}
+.bm-cont-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.bm-cont-card .pillbtn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* 6. Mobile Phone Breakpoint (<= 640px) */
+@media (max-width: 640px) {
+  .wrap {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* Compact Header so Logo + Search + Bell + Avatar never clip on 320px-390px screens */
+  .s-header .wrap {
+    min-height: 54px;
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .s-logo {
+    gap: 7px;
+    font-size: 16px;
+  }
+  .s-logo .mark {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+  }
+  .s-head-r {
+    gap: 6px;
+  }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+  .icon-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .s-avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .s-sign {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  /* Fixed centered mobile popups for Notifications & Profile Menu */
+  .notif-panel,
+  .profile-menu {
+    position: fixed;
+    top: calc(58px + var(--safe-top));
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+  }
+
+  /* Hero Cover Rail: 3 covers cleanly centered on mobile */
+  .hero-rail {
+    padding: 16px 0 14px;
+  }
+  .rail {
+    padding: 0 10px;
+    gap: 10px;
+  }
+  .rc {
+    width: 24%;
+    min-width: 72px;
+  }
+  .rc.center {
+    width: 46%;
+    min-width: 142px;
+  }
+
+  /* Panels & headings */
+  .panel,
+  .a-panel {
+    padding: 14px;
+  }
+  .panel-h2 {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .panel-h2 h2 {
+    font-size: 16.5px;
+  }
+  .pillbtn {
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+
+  /* Trending & Browse 2-column mobile cards */
+  .trend-row,
+  .browse-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+  .ucard .cinfo {
+    padding: 8px 9px 10px;
+    gap: 6px;
+  }
+  .ucard h3 {
+    font-size: 13px;
+  }
+  .chpill,
+  .stpill {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .bm-toggle {
+    padding: 7px 8px;
+    font-size: 11.5px;
+  }
+
+  /* Latest Updates rows on mobile */
+  .upd {
+    gap: 10px;
+    padding: 10px 2px;
+  }
+  .upd img,
+  .upd .upd-cov {
+    width: 66px;
+    height: 88px;
+  }
+  .upd h3 {
+    font-size: 13.5px;
+    margin-bottom: 5px;
+  }
+  .chrow {
+    font-size: 12px;
+    padding: 3px 0;
+  }
+  .read-bar {
+    font-size: 11.5px;
+    padding: 6px 9px;
+    margin-top: 5px;
+  }
+
+  /* Continue Reading card on mobile */
+  .bm-cont-card {
+    gap: 10px;
+    padding: 10px;
+  }
+  .bm-cont-card img,
+  .bm-cont-card .bm-cont-cov {
+    width: 54px;
+    height: 74px;
+  }
+  .bm-cont-info h4 {
+    font-size: 13px;
+  }
+  .bm-cont-info > span {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bm-cont-card .pillbtn {
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+
+  /* Browse / Search tools on mobile */
+  .s-search,
+  .browse-tools .s-search,
+  .a-top .s-search {
+    min-width: 0 !important;
+    width: 100%;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  /* Account profile header & stats on mobile */
+  .acct-head {
+    padding: 0 14px;
+    gap: 12px;
+  }
+  .acct-head img,
+  .acct-head .acct-av {
+    width: 72px;
+    height: 72px;
+  }
+  .acct-stats {
+    gap: 8px;
+  }
+  .hist-row {
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
+  }
+}
+
+/* 7. Admin Navigation Tabs & Responsive Admin Tables (.atable) on Mobile (<= 767px) */
+@media (max-width: 767px) {
+  .a-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 6px;
+  }
+  .a-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .stat-grid,
+  .stat-grid-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+  .stat {
+    padding: 12px 14px;
+  }
+  .stat .v {
+    font-size: 21px;
+  }
+
+  /* Convert wide .atable rows into clean multi-line mobile cards so no columns are cut off */
+  .atable,
+  .atable tbody {
+    display: block;
+    width: 100%;
+  }
+  .atable thead {
+    display: none;
+  }
+  .atable tbody tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px 10px;
+    padding: 12px 2px;
+    border-bottom: 1px solid var(--row-line);
+  }
+  .atable tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .atable tbody td {
+    padding: 0;
+    border: 0;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .atable tbody td:first-child {
+    flex: 1 1 100%;
+    width: 100%;
+    margin-bottom: 2px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .atable tbody td:last-child {
+    margin-left: auto;
+  }
+}
+
+/* ---------- GOLD ADMIN BADGE & PURPLE USER BADGE ---------- */
+.tag.gold {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.24), rgba(245, 158, 11, 0.14));
+  border: 1px solid rgba(251, 191, 36, 0.85);
+  color: #fbbf24;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border-radius: 20px;
+  padding: 3px 11px;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.22);
+}
+.tag.purple {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(147, 51, 234, 0.22);
+  border: 1px solid rgba(168, 85, 247, 0.55);
+  color: #d8b4fe;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border-radius: 20px;
+  padding: 3px 11px;
+}
+.pm-badge.user-badge {
+  background: rgba(147, 51, 234, 0.22);
+  border: 1px solid rgba(168, 85, 247, 0.65);
+  color: #d8b4fe;
+  box-shadow: 0 0 12px rgba(147, 51, 234, 0.22);
+}
+.a-avatar {
+  overflow: hidden;
+  border: 1.5px solid rgba(168, 85, 247, 0.5);
+}
+.a-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }

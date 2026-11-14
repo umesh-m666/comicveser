@@ -132,13 +132,13 @@ export async function getComic(slug: string): Promise<Comic | null> {
 export const years = () => Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
 
 export async function getAnnouncements() {
-  try { return await api<{ id: string; title: string; body: string }[]>("/announcements", { next: { revalidate: 30 } }); }
+  try { return await api<{ id: string; title: string; body: string }[]>("/announcements", { cache: "no-store" }); }
   catch { return []; } // announcements are optional; never break the homepage
 }
 
 export async function getNovels() {
   try {
-    const r = await api<{ items: { slug: string; title: string; author: string; chapterCount: number }[] }>("/novels?page=1", { next: { revalidate: 30 } });
+    const r = await api<{ items: { slug: string; title: string; author: string; chapterCount: number }[] }>("/novels?page=1", { cache: "no-store" });
     return r.items.slice(0, 3).map((n) => ({ slug: n.slug, title: n.title, author: n.author, chapters: n.chapterCount, hue: hueOf(n.slug) }));
   } catch { return []; }
 }

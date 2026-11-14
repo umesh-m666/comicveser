@@ -297,7 +297,7 @@ function BrowseContent() {
             </div>
 
             <div className="browse-tools" style={{ marginBottom: 0 }}>
-              <label className="s-search" style={{ minWidth: 200 }}>
+              <label className="s-search" >
                 <input
                   value={creatorInput}
                   onChange={(e) => setCreatorInput(e.target.value)}

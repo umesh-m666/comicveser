@@ -1,8 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import ComicForm from "@/components/admin/ComicForm";
 import { State } from "@/components/admin/ui";
 import { useLoad } from "@/lib/useApi";
 
@@ -24,15 +22,14 @@ type Provider = {
 };
 
 /**
- * Asura Admin Add Comic Page (#frame-admin-comics -> Add Comic / Provider Flow + Manual ComicForm):
- * Matches the Figma provider cards (.prov-grid, .prov-card, .pc-top, .prov-active, .prov-types, .prov-open)
- * AND includes the manual ComicForm so both provider catalogue import and direct comic creation work seamlessly.
+ * Asura Admin Add Comic Page (#frame-admin-comics -> Add Comic / Provider Flow):
+ * Displays external provider cards (.prov-grid, .prov-card, .pc-top, .prov-active, .prov-types, .prov-open)
+ * without manual comic creation.
  */
 export default function NewComic() {
   const { data, error, loading } = useLoad<{ enabled: boolean; sources: Provider[] }>(
     "/admin/sources",
   );
-  const [showManual, setShowManual] = useState(false);
   const providers = data?.sources ?? [];
 
   return (
@@ -41,13 +38,6 @@ export default function NewComic() {
         <Link href="/admin/comics" className="rowbtn">
           ← Back to Comics
         </Link>
-        <button
-          type="button"
-          onClick={() => setShowManual((v) => !v)}
-          className="rowbtn"
-        >
-          {showManual ? "Hide manual form" : "＋ Create comic manually"}
-        </button>
       </div>
 
       <div
@@ -80,7 +70,7 @@ export default function NewComic() {
 
       {data && !data.enabled && (
         <div role="status" className="a-panel text-sm text-muted">
-          External providers are disabled on the server. Enable external sources in the server configuration before using provider import, or create a comic manually below.
+          External providers are disabled on the server. Enable external sources in the server configuration before using provider import.
         </div>
       )}
 
@@ -152,15 +142,6 @@ export default function NewComic() {
           </div>
         </section>
       )}
-
-      {/* Manual Comic Creation Form (always accessible for manual / e2e creation) */}
-      <div className="a-panel" data-layer="Add Comic Form">
-        <h3>Add a new comic manually</h3>
-        <div className="psub">
-          No provider? Enter the title details yourself to create a draft or published comic directly.
-        </div>
-        <ComicForm mode="admin" />
-      </div>
     </div>
   );
 }

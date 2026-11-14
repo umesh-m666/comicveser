@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Cover } from "@/components/ComicCard";
+import { UserAvatar } from "@/components/ProfileMenu";
 import { Pager, State } from "@/components/admin/ui";
 import { useAuth } from "@/components/AuthProvider";
 import { api } from "@/lib/api";
@@ -23,10 +24,9 @@ function statusTagClass(st: "Ongoing" | "Completed" | "Hiatus"): "green" | "purp
 }
 
 /**
- * Asura Admin Comics Manager (#frame-admin-comics & image_b7348a.png 1:1):
- * - Top bar (.a-top): "Comics" heading + subtitle, search input ("Search comics…"), "+ Add Comic" purple button, and admin avatar initial.
- * - Panel 1 (.a-panel): "Add a new comic manually" with 4-column inline .a-form (Title, Genre, Status, "+ Add Comic").
- * - Panel 2 (.a-panel): "All comics" with .atable columns:
+ * Asura Admin Comics Manager (#frame-admin-comics):
+ * - Top bar (.a-top): "Comics" heading + subtitle, search input ("Search comics…"), "+ Add Comic" purple button, and admin profile avatar.
+ * - Panel (.a-panel): "All comics" with .atable columns:
  *   COMIC (34x45 cover + title) | GENRES | CHAPTERS | RATING (★ 9.8) | STATUS (green/purple/amber tag) | FEATURED (★ Featured / ☆ Feature) | Actions (Chapters, Publish/Unpublish, Delete).
  */
 export default function AdminComics({
@@ -35,11 +35,8 @@ export default function AdminComics({
   searchParams: { q?: string; state?: string; page?: string };
 }) {
   const { user } = useAuth();
+  const myProfile = useLoad<{ avatarUrl: string | null }>(user ? "/user/profile" : null);
   const [searchInput, setSearchInput] = useState(searchParams.q ?? "");
-  const [ncTitle, setNcTitle] = useState("");
-  const [ncGenre, setNcGenre] = useState("");
-  const [ncStatus, setNcStatus] = useState<"Ongoing" | "Completed" | "Hiatus">("Ongoing");
-  const [adding, setAdding] = useState(false);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
   const [featuredMap, setFeaturedMap] = useState<Record<string, boolean>>({});
@@ -56,7 +53,6 @@ export default function AdminComics({
     pages: number;
     total: number;
   }>(`/admin/comics?${sp}`);
-  const allGenres = useLoad<{ id: string; slug: string; name: string }[]>("/genres");
 
   useEffect(() => {
     try {
@@ -120,58 +116,14 @@ export default function AdminComics({
     );
   };
 
-  const handleManualAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const title = ncTitle.trim();
-    if (!title) return;
-    setAdding(true);
-    setErr("");
-    setNotice("");
-    try {
-      const requestedGenres = ncGenre
-        .split(",")
-        .map((g) => g.trim().toLowerCase())
-        .filter(Boolean);
-      const matchedSlugs = (allGenres.data ?? [])
-        .filter(
-          (g) =>
-            requestedGenres.includes(g.name.toLowerCase()) ||
-            requestedGenres.includes(g.slug.toLowerCase()),
-        )
-        .map((g) => g.slug);
-
-      await act("/admin/comics", "POST", {
-        title,
-        description: `${title} — added from the ComicVerse Admin Panel.`,
-        author: "ComicVerse Studio",
-        artist: "ComicVerse Studio",
-        type: "MANHWA",
-        status: ncStatus.toUpperCase(),
-        publishState: "PUBLISHED",
-        releaseYear: new Date().getFullYear(),
-        genreSlugs: matchedSlugs.slice(0, 10),
-      });
-      setNcTitle("");
-      setNcGenre("");
-      setNcStatus("Ongoing");
-      setNotice(`“${title}” added — it now appears in Browse, Trending and Search.`);
-      reload();
-    } catch (ex) {
-      setErr(errMsg(ex));
-    } finally {
-      setAdding(false);
-    }
-  };
-
   const qLower = searchInput.trim().toLowerCase();
   const visibleItems = (data?.items ?? []).filter((c) =>
     !qLower ? true : String(c.title).toLowerCase().includes(qLower),
   );
-  const userInitial = (user?.username || "U").slice(0, 1).toUpperCase();
 
   return (
     <div>
-      {/* Top Bar matching image_b7348a.png */}
+      {/* Top Bar */}
       <div className="a-top" data-layer="Admin Topbar">
         <div>
           <h1>Comics</h1>
@@ -195,87 +147,27 @@ export default function AdminComics({
         >
           ＋ Add Comic
         </Link>
-        <span className="a-avatar" aria-hidden="true">
-          {userInitial}
+        <span className="a-avatar overflow-hidden" aria-hidden="true">
+          <UserAvatar url={myProfile.data?.avatarUrl} name={user?.username || "U"} />
         </span>
       </div>
 
-      {/* Panel 1: Add a new comic manually (Matches image_b7348a.png 1:1) */}
-      <div className="a-panel" data-layer="Add Comic Form">
-        <h3>Add a new comic manually</h3>
-        <div className="psub">
-          No provider? Enter the title yourself — it appears in Browse, Trending and Search as soon as you save.
-        </div>
-        <form className="a-form" id="addComicForm" onSubmit={handleManualAdd}>
-          <label>
-            Title
-            <input
-              id="ncTitle"
-              required
-              value={ncTitle}
-              onChange={(e) => setNcTitle(e.target.value)}
-              placeholder="e.g. Blade of the Discarded"
-            />
-          </label>
-          <label>
-            Genre
-            <input
-              id="ncGenre"
-              required
-              value={ncGenre}
-              onChange={(e) => setNcGenre(e.target.value)}
-              placeholder="Action, Fantasy"
-            />
-          </label>
-          <label>
-            Status
-            <select
-              id="ncStatus"
-              value={ncStatus}
-              onChange={(e) =>
-                setNcStatus(e.target.value as "Ongoing" | "Completed" | "Hiatus")
-              }
-            >
-              <option value="Ongoing">Ongoing</option>
-              <option value="Completed">Completed</option>
-              <option value="Hiatus">Hiatus</option>
-            </select>
-          </label>
-          <label
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-            }}
-          >
-            <button
-              className="pillbtn"
-              type="submit"
-              disabled={adding}
-              style={{ justifyContent: "center", minHeight: 38, width: "100%", marginLeft: 0 }}
-            >
-              {adding ? "Adding…" : "＋ Add Comic"}
-            </button>
-          </label>
-        </form>
-        {notice && (
-          <p role="status" className="mt-2.5 text-xs text-emerald-400">
-            {notice}
-          </p>
-        )}
-        {err && (
-          <p role="alert" className="mt-2.5 text-xs text-danger">
-            {err}
-          </p>
-        )}
-      </div>
-
-      {/* Panel 2: All comics Table (Matches image_b7348a.png 1:1) */}
+      {/* All comics Table */}
       <div className="a-panel" data-layer="Comics Table">
         <h3>All comics</h3>
         <div className="psub">
           <span id="adminComicCount">{visibleItems.length} comics shown</span> · toggle Featured to pin a title into the home hero rail
         </div>
+        {notice && (
+          <p role="status" className="mb-2.5 text-xs text-emerald-400">
+            {notice}
+          </p>
+        )}
+        {err && (
+          <p role="alert" className="mb-2.5 text-xs text-danger">
+            {err}
+          </p>
+        )}
         <State loading={loading} error={error} />
         {data &&
           (visibleItems.length === 0 ? (
@@ -332,7 +224,7 @@ export default function AdminComics({
                           </span>
                         </td>
                         <td>{genresText}</td>
-                        <td>{chCount}</td>
+                        <td>{chCount} ch</td>
                         <td style={{ whiteSpace: "nowrap" }}>★ {ratingVal.toFixed(1)}</td>
                         <td>
                           <span className={`tag ${statusTagClass(statusLabel)}`}>
@@ -370,11 +262,10 @@ export default function AdminComics({
                             </Link>
                             <button
                               type="button"
-                              className="rowbtn danger del"
+                              className="rowbtn danger"
                               onClick={() =>
-                                confirm(
-                                  `Delete "${c.title}"? It will be archived and hidden.`,
-                                ) && run(() => act(`/admin/comics/${c.id}`, "DELETE"))
+                                confirm(`Delete “${c.title}”?`) &&
+                                run(() => act(`/admin/comics/${c.id}`, "DELETE"))
                               }
                             >
                               Delete

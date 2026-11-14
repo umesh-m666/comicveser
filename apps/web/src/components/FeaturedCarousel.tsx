@@ -84,7 +84,7 @@ export default function FeaturedCarousel({
             const isCenter = i === railIdx;
             const d = Math.abs(i - railIdx);
             const ratingText = c.rating && c.rating > 0 ? c.rating.toFixed(1) : "9.6";
-            const cls = `rc${isCenter ? " center" : ""}${d > 2 ? " hide-m" : ""}`;
+            const cls = `rc${isCenter ? " center" : ""}${d > 1 ? " hide-m" : ""}`;
 
             if (isCenter) {
               return (

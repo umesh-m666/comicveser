@@ -1,12 +1,15 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { UserAvatar } from "@/components/ProfileMenu";
 import { Badge, Pager, State, btnDanger, btnGhost, table } from "@/components/admin/ui";
 import { act, errMsg, useLoad } from "@/lib/useApi";
 
 /**
  * Asura Admin Users Page (#frame-admin-users):
- * .a-top header with search, .a-panel with .atable user rows and avatar initials.
+ * .a-top header with search, .a-panel with .atable user rows displaying profile images,
+ * GOLD badge for ADMIN role, and PURPLE badge for USER role.
  */
 export default function AdminUsers({
   searchParams,
@@ -14,6 +17,8 @@ export default function AdminUsers({
   searchParams: { q?: string; page?: string };
 }) {
   const router = useRouter();
+  const { user: currentUser } = useAuth();
+  const myProfile = useLoad<{ avatarUrl: string | null }>(currentUser ? "/user/profile" : null);
   const [err, setErr] = useState("");
   const sp = new URLSearchParams(
     Object.entries(searchParams).filter(([, v]) => v) as [string, string][],
@@ -91,47 +96,63 @@ export default function AdminUsers({
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      <span className="tcell">
-                        <span
-                          className="a-avatar"
-                          style={{ width: 32, height: 32, fontSize: 11 }}
-                        >
-                          {(u.username || "U").slice(0, 2).toUpperCase()}
+                {data.items.map((u) => {
+                  const roleStr = String(u.role ?? "USER").toUpperCase();
+                  const isAdminRole = roleStr === "ADMIN";
+                  const isSelf =
+                    currentUser &&
+                    (u.id === currentUser.id || u.username === currentUser.username);
+                  const avatarUrl =
+                    u.avatarUrl ??
+                    u.profile?.avatarUrl ??
+                    (isSelf ? myProfile.data?.avatarUrl : null);
+
+                  return (
+                    <tr key={u.id}>
+                      <td>
+                        <span className="tcell">
+                          <span
+                            className="a-avatar overflow-hidden"
+                            style={{ width: 36, height: 36, fontSize: 12 }}
+                          >
+                            <UserAvatar url={avatarUrl} name={u.username || "U"} />
+                          </span>
+                          <span>{u.username}</span>
                         </span>
-                        {u.username}
-                      </span>
-                    </td>
-                    <td>
-                      {u.email}
-                      {!u.emailVerifiedAt && (
-                        <span className="ml-1 text-xs text-muted">(unverified)</span>
-                      )}
-                    </td>
-                    <td>
-                      <span className="tag purple">{u.role}</span>
-                    </td>
-                    <td>
-                      <Badge v={u.status} />
-                    </td>
-                    <td>{new Date(u.createdAt).toLocaleDateString("en-IN")}</td>
-                    <td className="text-right">
-                      <button
-                        type="button"
-                        className={u.status === "ACTIVE" ? btnDanger : btnGhost}
-                        onClick={() =>
-                          (u.status !== "ACTIVE" ||
-                            confirm(`Suspend ${u.username}? They will be signed out.`)) &&
-                          toggle(u)
-                        }
-                      >
-                        {u.status === "ACTIVE" ? "Suspend" : "Restore"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        {u.email}
+                        {!u.emailVerifiedAt && (
+                          <span className="ml-1 text-xs text-muted">(unverified)</span>
+                        )}
+                      </td>
+                      <td>
+                        {isAdminRole ? (
+                          <span className="tag gold">★ {roleStr}</span>
+                        ) : (
+                          <span className="tag purple">{roleStr}</span>
+                        )}
+                      </td>
+                      <td>
+                        <Badge v={u.status} />
+                      </td>
+                      <td>{new Date(u.createdAt).toLocaleDateString("en-IN")}</td>
+                      <td className="text-right">
+                        <button
+                          type="button"
+                          className={u.status === "ACTIVE" ? btnDanger : btnGhost}
+                          onClick={() =>
+                            (u.status !== "ACTIVE" ||
+                              confirm(`Suspend ${u.username}? They will be signed out.`)) &&
+                            toggle(u)
+                          }
+                        >
+                          {u.status === "ACTIVE" ? "Suspend" : "Restore"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

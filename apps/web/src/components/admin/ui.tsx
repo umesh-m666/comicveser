@@ -25,13 +25,18 @@ export function Pager({ page, pages, href }: { page: number; pages: number; href
 }
 
 export const Badge = ({ v }: { v: string }) => {
+  const upper = String(v).toUpperCase();
   const tone =
-    v === "PUBLISHED" || v === "ACTIVE" || v === "APPROVED" || v === "Live"
+    upper === "ADMIN"
+      ? "gold"
+      : upper === "USER" || upper === "READER" || upper === "CREATOR"
+      ? "purple"
+      : v === "PUBLISHED" || v === "ACTIVE" || v === "APPROVED" || v === "Live"
       ? "green"
       : v === "SUSPENDED" || v === "REJECTED" || v === "FAILED"
       ? "red"
       : v === "PENDING" || v === "Scheduled"
       ? "amber"
       : "grey";
-  return <span className={`tag ${tone}`}>{v}</span>;
+  return <span className={`tag ${tone}`}>{upper === "ADMIN" ? `★ ${v}` : v}</span>;
 };

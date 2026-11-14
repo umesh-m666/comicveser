@@ -392,11 +392,16 @@ export class AdminService {
           emailVerifiedAt: true,
           createdAt: true,
           role: { select: { name: true } },
+          profile: { select: { avatarUrl: true } },
         },
       }),
     ]);
     return {
-      items: rows.map(({ role, ...u }) => ({ ...u, role: role.name })),
+      items: rows.map(({ role, profile, ...u }) => ({
+        ...u,
+        role: role.name,
+        avatarUrl: profile?.avatarUrl ?? null,
+      })),
       total,
       page: q.page,
       pages: Math.max(1, Math.ceil(total / SIZE)),

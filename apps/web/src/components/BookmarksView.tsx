@@ -281,7 +281,7 @@ export default function BookmarksView() {
                     className="pillbtn"
                     style={{ marginLeft: 0 }}
                   >
-                    Continue Ch. {cur.displayNumber}
+                    <span className="hidden sm:inline">Continue </span>Ch. {cur.displayNumber} →
                   </Link>
                 </div>
               );
@@ -413,7 +413,7 @@ export default function BookmarksView() {
             <div
               className="browse-grid"
               id="bmGrid"
-              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}
+              
             >
               {data.items.map((it) => {
                 const c = it.comic;

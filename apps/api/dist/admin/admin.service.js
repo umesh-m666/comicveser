@@ -44,7 +44,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminService = void 0;
 const common_1 = require("@nestjs/common");
@@ -414,11 +413,16 @@ let AdminService = class AdminService {
                     emailVerifiedAt: true,
                     createdAt: true,
                     role: { select: { name: true } },
+                    profile: { select: { avatarUrl: true } },
                 },
             }),
         ]);
         return {
-            items: rows.map(({ role, ...u }) => ({ ...u, role: role.name })),
+            items: rows.map(({ role, profile, ...u }) => ({
+                ...u,
+                role: role.name,
+                avatarUrl: profile?.avatarUrl ?? null,
+            })),
             total,
             page: q.page,
             pages: Math.max(1, Math.ceil(total / SIZE)),
@@ -737,5 +741,11 @@ exports.AdminService = AdminService = __decorate([
     __param(3, (0, common_1.Optional)()),
     __param(4, (0, common_1.Optional)()),
     __param(5, (0, common_1.Optional)()),
-    __metadata("design:paramtypes", [typeof (_a = typeof prisma_service_1.PrismaService !== "undefined" && prisma_service_1.PrismaService) === "function" ? _a : Object, typeof (_b = typeof storage_service_1.StorageService !== "undefined" && storage_service_1.StorageService) === "function" ? _b : Object, typeof (_c = typeof sources_service_1.SourcesService !== "undefined" && sources_service_1.SourcesService) === "function" ? _c : Object, typeof (_d = typeof auth_service_1.AuthService !== "undefined" && auth_service_1.AuthService) === "function" ? _d : Object, typeof (_e = typeof mail_service_1.MailService !== "undefined" && mail_service_1.MailService) === "function" ? _e : Object, typeof (_f = typeof notifications_service_1.NotificationsService !== "undefined" && notifications_service_1.NotificationsService) === "function" ? _f : Object])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        storage_service_1.StorageService,
+        sources_service_1.SourcesService,
+        auth_service_1.AuthService,
+        mail_service_1.MailService,
+        notifications_service_1.NotificationsService])
 ], AdminService);
+//# sourceMappingURL=admin.service.js.map

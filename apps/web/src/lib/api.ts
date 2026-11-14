@@ -86,7 +86,7 @@ export async function api<T = any>(
       credentials: rest.credentials ?? "include",
       headers,
       body: json !== undefined ? JSON.stringify(json) : rest.body,
-      cache: rest.cache ?? "no-store",
+      ...((rest as any).next ? {} : { cache: rest.cache ?? "no-store" }),
     });
   } catch {
     throw new ApiError(0, "Can't reach the server. Check your connection and try again.");
