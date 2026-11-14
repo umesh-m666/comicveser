@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Cover } from "@/components/ComicCard";
 import { UserAvatar } from "@/components/ProfileMenu";
@@ -25,18 +26,21 @@ function statusTagClass(st: "Ongoing" | "Completed" | "Hiatus"): "green" | "purp
 
 /**
  * Asura Admin Comics Manager (#frame-admin-comics):
- * - Top bar (.a-top): "Comics" heading + subtitle, search input ("Search comics…"), "+ Add Comic" purple button, and admin profile avatar.
- * - Panel (.a-panel): "All comics" with .atable columns:
- *   COMIC (34x45 cover + title) | GENRES | CHAPTERS | RATING (★ 9.8) | STATUS (green/purple/amber tag) | FEATURED (★ Featured / ☆ Feature) | Actions (Chapters, Publish/Unpublish, Delete).
+ * - Reactive pagination via useSearchParams() + local page state so clicking Next/Prev always loads the next page.
+ * - Clean mobile card arrangement for every comic row (Line 1: Cover + Title; Line 2: Genre, Chapters, Rating, Status; Line 3: Featured toggle + Chapters/Delete buttons).
  */
-export default function AdminComics({
-  searchParams,
-}: {
-  searchParams: { q?: string; state?: string; page?: string };
-}) {
+export default function AdminComics() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const myProfile = useLoad<{ avatarUrl: string | null }>(user ? "/user/profile" : null);
-  const [searchInput, setSearchInput] = useState(searchParams.q ?? "");
+
+  const urlQ = searchParams.get("q") ?? "";
+  const urlState = searchParams.get("state") ?? "";
+  const urlPage = Math.max(1, Number(searchParams.get("page")) || 1);
+
+  const [page, setPage] = useState(urlPage);
+  const [searchInput, setSearchInput] = useState(urlQ);
   const [err, setErr] = useState("");
   const [notice, setNotice] = useState("");
   const [featuredMap, setFeaturedMap] = useState<Record<string, boolean>>({});
@@ -44,15 +48,21 @@ export default function AdminComics({
     Map<string, { genres: string[]; rating: number; coverUrl: string | null }>
   >(new Map());
 
-  const sp = new URLSearchParams(
-    Object.entries(searchParams).filter(([, v]) => v) as [string, string][],
-  );
+  useEffect(() => {
+    setPage(urlPage);
+  }, [urlPage]);
+
+  const sp = new URLSearchParams();
+  if (urlQ) sp.set("q", urlQ);
+  if (urlState) sp.set("state", urlState);
+  sp.set("page", String(page));
+
   const { data, error, loading, reload } = useLoad<{
     items: any[];
     page: number;
     pages: number;
     total: number;
-  }>(`/admin/comics?${sp}`);
+  }>(`/admin/comics?${sp.toString()}`);
 
   useEffect(() => {
     try {
@@ -87,8 +97,13 @@ export default function AdminComics({
     };
   }, [data]);
 
-  const href = (p: number) =>
-    `/admin/comics?${new URLSearchParams({ ...Object.fromEntries(sp), page: String(p) })}`;
+  const href = (p: number) => {
+    const nextSp = new URLSearchParams();
+    if (urlQ) nextSp.set("q", urlQ);
+    if (urlState) nextSp.set("state", urlState);
+    nextSp.set("page", String(p));
+    return `/admin/comics?${nextSp.toString()}`;
+  };
 
   const run = async (fn: () => Promise<unknown>) => {
     setErr("");
@@ -124,32 +139,46 @@ export default function AdminComics({
   return (
     <div>
       {/* Top Bar */}
-      <div className="a-top" data-layer="Admin Topbar">
-        <div>
-          <h1>Comics</h1>
-          <div className="sub">Add, edit and feature titles in the ComicVerse catalogue.</div>
+      <div className="a-top a-top-comics" data-layer="Admin Topbar">
+        <div className="a-top-head">
+          <div>
+            <h1>Comics</h1>
+            <div className="sub">Add, edit and feature titles in the ComicVerse catalogue.</div>
+          </div>
+          <div className="a-top-actions">
+            <Link
+              href="/admin/comics/new"
+              className="pillbtn"
+              style={{ minHeight: 38, marginLeft: 0 }}
+            >
+              ＋ Add Comic
+            </Link>
+            <span className="a-avatar overflow-hidden" aria-hidden="true">
+              <UserAvatar url={myProfile.data?.avatarUrl} name={user?.username || "U"} />
+            </span>
+          </div>
         </div>
-        <label className="s-search" htmlFor="adminComicSearch">
+
+        <label className="s-search a-comics-search" htmlFor="adminComicSearch">
           <span aria-hidden="true">⌕</span>
           <input
             id="adminComicSearch"
             type="search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setPage(1);
+                const nextSp = new URLSearchParams();
+                if (searchInput.trim()) nextSp.set("q", searchInput.trim());
+                nextSp.set("page", "1");
+                router.push(`/admin/comics?${nextSp.toString()}`);
+              }
+            }}
             placeholder="Search comics…"
             aria-label="Search comics in admin"
           />
         </label>
-        <Link
-          href="/admin/comics/new"
-          className="pillbtn"
-          style={{ minHeight: 40, marginLeft: 0 }}
-        >
-          ＋ Add Comic
-        </Link>
-        <span className="a-avatar overflow-hidden" aria-hidden="true">
-          <UserAvatar url={myProfile.data?.avatarUrl} name={user?.username || "U"} />
-        </span>
       </div>
 
       {/* All comics Table */}
@@ -174,7 +203,7 @@ export default function AdminComics({
             <p className="text-muted">No comics found.</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table className="atable">
+              <table className="atable atable-comics">
                 <thead>
                   <tr>
                     <th>Comic</th>
@@ -210,7 +239,7 @@ export default function AdminComics({
 
                     return (
                       <tr key={c.id}>
-                        <td>
+                        <td className="c-cell-title">
                           <span className="tcell">
                             <Cover
                               hue={hueOf(c.slug || c.title)}
@@ -223,15 +252,17 @@ export default function AdminComics({
                             </Link>
                           </span>
                         </td>
-                        <td>{genresText}</td>
-                        <td>{chCount} ch</td>
-                        <td style={{ whiteSpace: "nowrap" }}>★ {ratingVal.toFixed(1)}</td>
-                        <td>
+                        <td className="c-cell-meta">{genresText}</td>
+                        <td className="c-cell-meta">{chCount} ch</td>
+                        <td className="c-cell-meta" style={{ whiteSpace: "nowrap" }}>
+                          ★ {ratingVal.toFixed(1)}
+                        </td>
+                        <td className="c-cell-status">
                           <span className={`tag ${statusTagClass(statusLabel)}`}>
                             {statusLabel}
                           </span>
                         </td>
-                        <td>
+                        <td className="c-cell-feat">
                           <button
                             type="button"
                             className="rowbtn feat"
@@ -240,7 +271,7 @@ export default function AdminComics({
                             {isFeatured ? "★ Featured" : "☆ Feature"}
                           </button>
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}>
+                        <td className="c-cell-actions" style={{ whiteSpace: "nowrap" }}>
                           <div className="flex items-center justify-end gap-1.5">
                             {isDraft && (
                               <button
@@ -279,7 +310,14 @@ export default function AdminComics({
               </table>
             </div>
           ))}
-        {data && <Pager page={data.page} pages={data.pages} href={href} />}
+        {data && (
+          <Pager
+            page={page}
+            pages={data.pages}
+            onPageChange={(p) => setPage(p)}
+            href={href}
+          />
+        )}
       </div>
     </div>
   );

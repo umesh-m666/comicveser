@@ -1,13 +1,22 @@
 "use client";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Pager, State, table } from "@/components/admin/ui";
 import { useLoad } from "@/lib/useApi";
 
 /**
  * Asura Admin Audit Logs Page (#frame-admin-audit):
- * .a-top header, .a-panel with .atable audit log entries.
+ * .a-top header, .a-panel with .atable audit log entries and reactive pagination.
  */
-export default function AuditLogs({ searchParams }: { searchParams: { page?: string } }) {
-  const page = Math.max(1, Number(searchParams.page) || 1);
+export default function AuditLogs() {
+  const searchParams = useSearchParams();
+  const urlPage = Math.max(1, Number(searchParams.get("page")) || 1);
+  const [page, setPage] = useState(urlPage);
+
+  useEffect(() => {
+    setPage(urlPage);
+  }, [urlPage]);
+
   const { data, error, loading } = useLoad<{ items: any[]; page: number; pages: number }>(
     `/admin/audit-logs?page=${page}`,
   );
@@ -61,7 +70,14 @@ export default function AuditLogs({ searchParams }: { searchParams: { page?: str
               </table>
             </div>
           ))}
-        {data && <Pager page={data.page} pages={data.pages} href={(p) => `/admin/audit-logs?page=${p}`} />}
+        {data && (
+          <Pager
+            page={page}
+            pages={data.pages}
+            onPageChange={(p) => setPage(p)}
+            href={(p) => `/admin/audit-logs?page=${p}`}
+          />
+        )}
       </div>
     </div>
   );

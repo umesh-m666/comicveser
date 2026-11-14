@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Cover } from "./ComicCard";
 import { ApiError, api } from "@/lib/api";
-import { timeAgo } from "@/lib/comics";
 import { coverSrc, hueOf } from "@/lib/media";
 import { act } from "@/lib/useApi";
 import { useAuth } from "./AuthProvider";
@@ -69,10 +68,29 @@ const STATUS_DOT_COLOR: Record<Status, string> = {
   DROPPED: "#f87171",
 };
 
+function formatBookmarkedDate(iso?: string | null): string {
+  if (!iso) return "Recently";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Recently";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatTypeLabel(raw?: string | null): string {
+  if (!raw) return "Manhwa";
+  const s = raw.toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /**
- * Asura-style Bookmarks Library (#frame-bookmarks & #frame-mobile-bookmarks)
- * with Library Stats, Continue Reading strip, Bookmark Cards with status pill + fraction badge,
- * and Interactive Bookmark Detail Modal (.bm-modal).
+ * Bookmarks Library matching reference screenshots 36691.jpg & 36692.jpg 1:1:
+ * - Collapsible "Continue Reading" horizontal card carousel with cover, title, X dismiss button,
+ *   purple percentage, purple progress bar, and "Ch. X" / "Ch. Total" footer.
+ * - Clean 2-column mobile / 4-column desktop poster grid where each card shows:
+ *   - Top-left status pill with colored dot ("Plan to Read", "On Hold", "Reading", etc.)
+ *   - Bottom-right dark badge with gold fraction ("0/348", "65/132", "170/197", "79/102")
+ *   - Bottom dark bar with 1-line truncated comic title.
+ * - Clicking any card opens the Bookmark Detail Modal (36692.jpg) with circular -/+ chapter stepper,
+ *   "Set to Chapter X" button, progress bar, colored-dot status dropdown, and [▶ Chapter X] [ⓘ] [🗑] buttons.
  */
 export default function BookmarksView() {
   const router = useRouter();
@@ -88,9 +106,20 @@ export default function BookmarksView() {
   const [err, setErr] = useState("");
   const [reloadTick, setReloadTick] = useState(0);
 
+  // Collapsible Continue Reading section & dismissed IDs
+  const [continueOpen, setContinueOpen] = useState(true);
+  const [dismissedContinueIds, setDismissedContinueIds] = useState<Record<string, boolean>>({});
+
   // Bookmark Detail Modal state
   const [modalItem, setModalItem] = useState<Item | null>(null);
-  const [modalChapNum, setModalChapNum] = useState<number>(0);
+  const [modalChapNum, setModalChapNum] = useState<number>(1);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("cv:bm:dismissedContinue") ?? "null");
+      if (saved && typeof saved === "object") setDismissedContinueIds(saved);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -161,41 +190,67 @@ export default function BookmarksView() {
     setBusy(it.comic.id);
     setErr("");
     try {
-      await act(`/user/bookmarks/${it.comic.id}/status`, "PUT", { status: s });
+      await act(`/user/bookmarks/${it.comic.id}`, "PUT", { status: s });
+      if (modalItem?.comic.id === it.comic.id && s !== "AUTO") {
+        setModalItem({ ...modalItem, status: s, statusSource: "manual" });
+      }
       reload();
     } catch {
-      setErr("Couldn't change the status. Please try again.");
+      setErr("Couldn't update that status. Please try again.");
     } finally {
       setBusy(null);
     }
   };
 
-  const openModal = (it: Item) => {
-    const curNum = it.progress.current?.number ?? it.progress.readCount ?? 0;
-    setModalItem(it);
-    setModalChapNum(curNum);
+  const dismissContinueCard = (e: React.MouseEvent, comicId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = { ...dismissedContinueIds, [comicId]: true };
+    setDismissedContinueIds(next);
+    try {
+      localStorage.setItem("cv:bm:dismissedContinue", JSON.stringify(next));
+    } catch {}
   };
 
   const counts = data?.counts ?? {};
+  const total = data ? Object.values(counts).reduce((a, b) => a + b, 0) : 0;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
-  const total = counts.ALL ?? data?.total ?? 0;
-  const filtered = tab !== "ALL" || !!dq;
+  const filtered = tab !== "ALL" || dq.length > 0;
 
-  const items = data?.items ?? [];
-  const updatesWaiting = items.filter(
-    (it) => it.comic.totalChapters > (it.progress.current?.number ?? it.progress.readCount ?? 0),
-  ).length;
-  const totalLibraryChapters = items.reduce((acc, it) => acc + (it.comic.totalChapters || 0), 0);
-  const avgProgress = items.length
-    ? Math.round(items.reduce((acc, it) => acc + (it.progress.percent || 0), 0) / items.length)
-    : 0;
-  const continueItems = items.filter((it) => it.progress.current).slice(0, 3);
+  const { updatesWaiting, totalLibraryChapters, avgProgress, continueItems } = useMemo(() => {
+    const list = data?.items ?? [];
+    let waiting = 0;
+    let totalCh = 0;
+    let sumPct = 0;
+    for (const it of list) {
+      totalCh += it.comic.totalChapters || 0;
+      sumPct += it.progress.percent || 0;
+      const readNum = it.progress.current?.number ?? it.progress.readCount ?? 0;
+      if (it.comic.totalChapters > readNum) waiting++;
+    }
+    const avg = list.length ? Math.round(sumPct / list.length) : 0;
+    const cont = list
+      .filter((it) => it.progress.current !== null && !dismissedContinueIds[it.comic.id])
+      .slice(0, 6);
+    return {
+      updatesWaiting: waiting,
+      totalLibraryChapters: totalCh,
+      avgProgress: avg,
+      continueItems: cont,
+    };
+  }, [data, dismissedContinueIds]);
+
+  const openModal = (it: Item) => {
+    setModalItem(it);
+    const curNum = it.progress.current?.number ?? it.progress.readCount ?? 0;
+    setModalChapNum(curNum > 0 ? curNum : 1);
+  };
 
   const skeleton = useMemo(
     () => (
-      <div className="browse-grid" aria-busy="true">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skeleton aspect-[3/4] w-full rounded-xl" />
+      <div className="bm-poster-grid" aria-busy="true">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="skeleton aspect-[3/4.3] rounded-xl" />
         ))}
       </div>
     ),
@@ -243,54 +298,82 @@ export default function BookmarksView() {
         </div>
       </section>
 
-      {/* 2. Continue Reading Strip */}
+      {/* 2. Continue Reading Collapsible Card Carousel (Matches 36691.jpg 1:1) */}
       {continueItems.length > 0 && (
-        <section className="panel" data-layer="Continue Reading">
-          <div className="panel-h2">
-            <span className="ic" aria-hidden="true">
-              ▶
-            </span>
-            <h2 style={{ fontSize: 17 }}>Continue Reading</h2>
-          </div>
-          <div className="bm-continue">
-            {continueItems.map((it) => {
-              const c = it.comic;
-              const cur = it.progress.current!;
-              const left = Math.max(0, c.totalChapters - cur.number);
-              return (
-                <div key={c.id} className="bm-cont-card">
-                  <Cover
-                    hue={hueOf(c.slug)}
-                    title={c.title}
-                    src={coverSrc(c.coverUrl)}
-                    className="bm-cont-cov border-0 !p-1"
-                  />
-                  <div className="bm-cont-info">
-                    <h4>{c.title}</h4>
-                    <span>Last read · Chapter {cur.displayNumber}</span>
-                    <div className="m-prog">
-                      <i style={{ width: `${it.progress.percent}%` }} />
-                    </div>
-                    <span className="bm-cont-meta">
-                      Chapter {cur.displayNumber} of {c.totalChapters}
-                      {left > 0 ? ` · ${left} new` : " · Caught up"}
-                    </span>
-                  </div>
+        <section className="panel bm-cont-panel" data-layer="Continue Reading">
+          <button
+            type="button"
+            className="bm-cont-header"
+            onClick={() => setContinueOpen((o) => !o)}
+            aria-expanded={continueOpen}
+          >
+            <h2>Continue Reading</h2>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`bm-cont-chev${continueOpen ? " open" : ""}`}
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          {continueOpen && (
+            <div className="bm-continue-rail">
+              {continueItems.map((it) => {
+                const c = it.comic;
+                const cur = it.progress.current!;
+                const pct =
+                  it.progress.percent > 0
+                    ? it.progress.percent
+                    : c.totalChapters > 0
+                    ? Math.min(100, Math.round((cur.number / c.totalChapters) * 100))
+                    : 0;
+
+                return (
                   <Link
+                    key={c.id}
                     href={`/comics/${c.slug}/chapter/${cur.chapterId}`}
-                    className="pillbtn"
-                    style={{ marginLeft: 0 }}
+                    className="bm-cont-card-v2"
                   >
-                    <span className="hidden sm:inline">Continue </span>Ch. {cur.displayNumber} →
+                    <Cover
+                      hue={hueOf(c.slug)}
+                      title={c.title}
+                      src={coverSrc(c.coverUrl)}
+                      className="bm-cont-cov-v2 border-0 !p-1"
+                    />
+                    <div className="bm-cont-body-v2">
+                      <button
+                        type="button"
+                        className="bm-cont-x"
+                        aria-label={`Hide ${c.title} from Continue Reading`}
+                        onClick={(e) => dismissContinueCard(e, c.id)}
+                      >
+                        ✕
+                      </button>
+                      <h4>{c.title}</h4>
+                      <span className="bm-cont-pct">{pct}%</span>
+                      <div className="bm-cont-bar">
+                        <i style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="bm-cont-ch-row">
+                        <span>Ch. {cur.displayNumber}</span>
+                        <span>Ch. {c.totalChapters}</span>
+                      </div>
+                    </div>
                   </Link>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
-      {/* 3. Library Filters + Grid Panel */}
+      {/* 3. Library Filters + Poster Grid (Matches 36691.jpg 1:1) */}
       <section className="panel" data-layer="Library Filters + Grid">
         <div className="browse-tools">
           <label className="s-search" htmlFor="bm-q">
@@ -410,133 +493,42 @@ export default function BookmarksView() {
 
         {state === "ok" && data && data.items.length > 0 && (
           <>
-            <div
-              className="browse-grid"
-              id="bmGrid"
-              
-            >
+            <div className="bm-poster-grid" id="bmGrid">
               {data.items.map((it) => {
                 const c = it.comic;
                 const cur = it.progress.current;
                 const readNum = cur?.number ?? it.progress.readCount ?? 0;
-                const left = Math.max(0, c.totalChapters - readNum);
-                const readHref = cur
-                  ? `/comics/${c.slug}/chapter/${cur.chapterId}`
-                  : it.comic.latestChapter
-                  ? `/comics/${c.slug}/chapter/${it.comic.latestChapter.id}`
-                  : `/comics/${c.slug}`;
-                const dotColor = STATUS_DOT_COLOR[it.status] ?? "#3b82f6";
+                const dotColor = STATUS_DOT_COLOR[it.status] ?? "#a855f7";
 
                 return (
-                  <div
+                  <button
                     key={c.id}
-                    className="bm-card"
+                    type="button"
+                    className="bm-poster-card"
                     style={busy === c.id ? { opacity: 0.6, pointerEvents: "none" } : undefined}
-                    onClick={(e) => {
-                      if (
-                        (e.target as HTMLElement).closest(".bm-actions") ||
-                        (e.target as HTMLElement).closest("a") ||
-                        (e.target as HTMLElement).closest("select")
-                      ) {
-                        return;
-                      }
-                      openModal(it);
-                    }}
+                    onClick={() => openModal(it)}
                   >
-                    <div className="ccard">
-                      <span className="cov">
-                        <Cover
-                          hue={hueOf(c.slug)}
-                          title={c.title}
-                          src={coverSrc(c.coverUrl)}
-                          className="h-full w-full rounded-none border-0"
-                        />
-                        <span className="bm-status">
-                          <span className="dot" style={{ background: dotColor }} />
-                          {LABEL[it.status] ?? "Reading"}
-                        </span>
-                        {left > 0 && <span className="bm-new">{left} NEW</span>}
-                        <span className="bm-frac">
-                          {readNum}/{c.totalChapters}
-                        </span>
-                      </span>
-                      <Link href={`/comics/${c.slug}`}>
-                        <h3 title={c.title}>{c.title}</h3>
-                      </Link>
-                    </div>
-
-                    <div className="bm-meta">
-                      <span className="stars">
-                        ★★★★★<b>9.5</b>
-                      </span>
-                      <span
-                        className="status-dot"
-                        style={{
-                          background:
-                            c.status.toLowerCase() === "completed"
-                              ? "var(--purple-2)"
-                              : "var(--green)",
-                        }}
+                    <span className="bm-poster-cov">
+                      <Cover
+                        hue={hueOf(c.slug)}
+                        title={c.title}
+                        src={coverSrc(c.coverUrl)}
+                        className="h-full w-full rounded-none border-0"
                       />
-                      <span>{c.status}</span>
-                    </div>
-
-                    <div className="m-prog" style={{ margin: "7px 0 5px" }}>
-                      <i style={{ width: `${it.progress.percent}%` }} />
-                    </div>
-
-                    <div className="bm-meta">
-                      <span>
-                        Read to Ch. {cur?.displayNumber ?? readNum} of {c.totalChapters}
+                      <span className="bm-status-v2">
+                        <span className="dot" style={{ background: dotColor }} />
+                        {LABEL[it.status] ?? "Reading"}
                       </span>
-                      <span suppressHydrationWarning>
-                        {timeAgo(it.progress.lastReadAt ?? it.bookmarkedAt) || "Saved"}
+                      <span className="bm-frac-v2">
+                        {readNum}/{c.totalChapters}
                       </span>
-                    </div>
-
-                    <div className="mt-2">
-                      <select
-                        aria-label={`Reading status for ${c.title}`}
-                        value={it.statusSource === "manual" ? it.status : "AUTO"}
-                        onChange={(e) => void setStatus(it, e.target.value as Status | "AUTO")}
-                        className="w-full rounded-md border border-[#353247] bg-[#17141f] px-2.5 py-1.5 text-xs font-semibold text-[#d9d5e8]"
-                      >
-                        <option value="AUTO">{LABEL[it.status]} (auto)</option>
-                        {TABS.slice(1).map((t) => (
-                          <option key={t.key} value={t.key}>
-                            {t.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="bm-actions">
-                      <Link
-                        href={readHref}
-                        className="pillbtn"
-                        style={{ flex: 1, justifyContent: "center" }}
-                      >
-                        {cur ? `Continue Ch. ${cur.displayNumber}` : "Start Reading"}
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => openModal(it)}
-                        className="rowbtn"
-                        title="Bookmark details"
-                        aria-label={`Details for ${c.title}`}
-                      >
-                        ⚙
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void remove(it)}
-                        className="rowbtn danger bm-remove"
-                        aria-label={`Remove ${c.title} from bookmarks`}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
+                    </span>
+                    <span className="bm-poster-foot">
+                      <span className="bm-poster-title" title={c.title}>
+                        {c.title}
+                      </span>
+                    </span>
+                  </button>
                 );
               })}
             </div>
@@ -548,7 +540,7 @@ export default function BookmarksView() {
                   disabled={pageNo <= 1}
                   onClick={() => setPageNo((p) => p - 1)}
                 >
-                  ‹ Previous
+                  ‹ Prev
                 </button>
                 <button type="button" className="on">
                   Page {pageNo} of {pages}
@@ -566,7 +558,7 @@ export default function BookmarksView() {
         )}
       </section>
 
-      {/* Asura Bookmark Detail Modal (.bm-modal-overlay / .bm-modal) */}
+      {/* 4. Bookmark Detail Modal (Matches 36692.jpg 1:1) */}
       {modalItem && (
         <div
           className="bm-modal-overlay"
@@ -575,25 +567,24 @@ export default function BookmarksView() {
             if (e.target === e.currentTarget) setModalItem(null);
           }}
         >
-          <div className="bm-modal" role="dialog" aria-modal="true" aria-label={modalItem.comic.title}>
-            <div className="bmm-head">
+          <div className="bm-modal-v2" role="dialog" aria-modal="true" aria-label={modalItem.comic.title}>
+            <div className="bmm-head-v2">
               <Cover
                 hue={hueOf(modalItem.comic.slug)}
                 title={modalItem.comic.title}
                 src={coverSrc(modalItem.comic.coverUrl)}
-                className="bmm-cov border-0 !p-1"
+                className="bmm-cov-v2 border-0 !p-1"
               />
-              <div style={{ minWidth: 0 }}>
+              <div className="bmm-head-info">
                 <h3>{modalItem.comic.title}</h3>
                 <span className="bdate">
-                  Bookmarked ·{" "}
-                  {timeAgo(modalItem.progress.lastReadAt ?? modalItem.bookmarkedAt) || "recently"}
+                  Bookmarked {formatBookmarkedDate(modalItem.bookmarkedAt)}
                 </span>
-                <span className="bmm-type">{modalItem.comic.type || "Manhwa"}</span>
+                <span className="bmm-type-v2">{formatTypeLabel(modalItem.comic.type)}</span>
               </div>
               <button
                 type="button"
-                className="bmm-x"
+                className="bmm-x-v2"
                 aria-label="Close"
                 onClick={() => setModalItem(null)}
               >
@@ -601,22 +592,22 @@ export default function BookmarksView() {
               </button>
             </div>
 
-            <div className="bmm-stepper">
+            <div className="bmm-stepper-v2">
               <button
                 type="button"
-                className="bmm-step minus"
+                className="bmm-circle-btn"
                 aria-label="Previous chapter"
                 disabled={modalChapNum <= 0}
                 onClick={() => setModalChapNum((n) => Math.max(0, n - 1))}
               >
                 −
               </button>
-              <span className="bmm-cur">
+              <span className="bmm-chap-text">
                 Chapter {modalChapNum} / {modalItem.comic.totalChapters}
               </span>
               <button
                 type="button"
-                className="bmm-step plus"
+                className="bmm-circle-btn"
                 aria-label="Next chapter"
                 disabled={modalChapNum >= modalItem.comic.totalChapters}
                 onClick={() =>
@@ -629,83 +620,128 @@ export default function BookmarksView() {
 
             <button
               type="button"
-              className="set-latest"
+              className="bmm-set-latest"
               onClick={() => setModalChapNum(modalItem.comic.totalChapters)}
             >
               Set to Chapter {modalItem.comic.totalChapters}
             </button>
 
-            <div className="bmm-prog">
+            <div className="bmm-prog-v2">
               <i
                 style={{
                   width: `${
                     modalItem.comic.totalChapters
-                      ? Math.round((modalChapNum / modalItem.comic.totalChapters) * 100)
+                      ? Math.min(100, Math.round((modalChapNum / modalItem.comic.totalChapters) * 100))
                       : 0
                   }%`,
                 }}
               />
             </div>
-            <div className="bmm-prog-l">
-              <span className="pl">Chapter {modalChapNum}</span>
-              <span className="pr">
-                {modalItem.comic.totalChapters - modalChapNum > 0
-                  ? `${modalItem.comic.totalChapters - modalChapNum} behind`
-                  : "Caught up"}
+            <div className="bmm-prog-labels">
+              <span>Chapter {modalChapNum}</span>
+              <span>
+                {Math.max(0, modalItem.comic.totalChapters - modalChapNum)} behind
               </span>
             </div>
 
-            <select
-              className="status-sel"
-              aria-label="Reading status"
-              value={modalItem.statusSource === "manual" ? modalItem.status : "AUTO"}
-              onChange={(e) => {
-                const nextStatus = e.target.value as Status | "AUTO";
-                void setStatus(modalItem, nextStatus);
-              }}
-            >
-              <option value="AUTO">{LABEL[modalItem.status]} (auto)</option>
-              {TABS.slice(1).map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            <div className="bmm-status-box">
+              <span
+                className="bmm-status-dot"
+                style={{ background: STATUS_DOT_COLOR[modalItem.status] ?? "#a855f7" }}
+              />
+              <select
+                className="bmm-status-select"
+                aria-label="Reading status"
+                value={modalItem.status}
+                onChange={(e) => {
+                  const nextStatus = e.target.value as Status;
+                  void setStatus(modalItem, nextStatus);
+                }}
+              >
+                {TABS.slice(1).map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="bmm-status-chev"
+                aria-hidden="true"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
 
-            <div className="bmm-actions">
+            <div className="bmm-actions-v2">
               <Link
                 href={
                   modalItem.progress.current
                     ? `/comics/${modalItem.comic.slug}/chapter/${modalItem.progress.current.chapterId}`
+                    : modalItem.comic.latestChapter
+                    ? `/comics/${modalItem.comic.slug}/chapter/${modalItem.comic.latestChapter.id}`
                     : `/comics/${modalItem.comic.slug}`
                 }
-                className="bmm-play"
+                className="bmm-play-v2"
                 onClick={() => setModalItem(null)}
               >
-                ▶{" "}
-                {modalItem.progress.current
-                  ? `Chapter ${modalItem.progress.current.displayNumber}`
-                  : "Read Now"}
+                <span aria-hidden="true">▶</span>{" "}
+                <span>
+                  Chapter {modalItem.progress.current?.displayNumber ?? (modalChapNum || 1)}
+                </span>
               </Link>
               <button
                 type="button"
-                className="bmm-sq info"
-                aria-label="About this comic"
+                className="bmm-sq-v2 info"
+                aria-label="Comic details"
                 onClick={() => {
                   const slug = modalItem.comic.slug;
                   setModalItem(null);
                   router.push(`/comics/${slug}`);
                 }}
               >
-                ⓘ
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
               </button>
               <button
                 type="button"
-                className="bmm-sq del"
+                className="bmm-sq-v2 del"
                 aria-label="Remove bookmark"
                 onClick={() => void remove(modalItem)}
               >
-                🗑
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
               </button>
             </div>
           </div>

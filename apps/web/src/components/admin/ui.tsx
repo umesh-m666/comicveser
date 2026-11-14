@@ -1,4 +1,6 @@
+"use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export const input = "set-input";
 export const btn = "pillbtn !ml-0";
@@ -11,15 +13,58 @@ export function State({ loading, error }: { loading: boolean; error: { message: 
   return loading ? <div className="skeleton h-24" aria-busy="true" /> : null;
 }
 
-export function Pager({ page, pages, href }: { page: number; pages: number; href: (p: number) => string }) {
+export function Pager({
+  page,
+  pages,
+  href,
+  onPageChange,
+}: {
+  page: number;
+  pages: number;
+  href: (p: number) => string;
+  onPageChange?: (p: number) => void;
+}) {
+  const router = useRouter();
   if (pages <= 1) return null;
+
+  const go = (e: React.MouseEvent, targetPage: number) => {
+    e.preventDefault();
+    if (targetPage < 1 || targetPage > pages || targetPage === page) return;
+    if (onPageChange) onPageChange(targetPage);
+    router.push(href(targetPage));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   return (
     <nav aria-label="Pagination" className="pager">
-      {page > 1 && <Link href={href(page - 1)}>‹ Previous</Link>}
-      <span className="on" style={{ padding: "0 12px", borderRadius: 7, background: "var(--purple)", color: "#fff", display: "inline-grid", placeItems: "center", height: 34, fontSize: 12.5, fontWeight: 600 }}>
+      {page > 1 && (
+        <Link href={href(page - 1)} onClick={(e) => go(e, page - 1)}>
+          ‹ Prev
+        </Link>
+      )}
+      <span
+        className="on"
+        style={{
+          padding: "0 12px",
+          borderRadius: 7,
+          background: "var(--purple)",
+          color: "#fff",
+          display: "inline-grid",
+          placeItems: "center",
+          height: 34,
+          fontSize: 12.5,
+          fontWeight: 600,
+        }}
+      >
         Page {page} of {pages}
       </span>
-      {page < pages && <Link href={href(page + 1)}>Next ›</Link>}
+      {page < pages && (
+        <Link href={href(page + 1)} onClick={(e) => go(e, page + 1)}>
+          Next ›
+        </Link>
+      )}
     </nav>
   );
 }
